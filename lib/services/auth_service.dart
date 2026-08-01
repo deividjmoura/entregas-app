@@ -5,7 +5,10 @@ import '../utils/constantes.dart';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId:
+        'SEU_CLIENT_ID_WEB.apps.googleusercontent.com', // só necessário no web
+  );
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // ===================== GETTERS =====================
@@ -55,7 +58,8 @@ class AuthService {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null; // Usuário cancelou
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,

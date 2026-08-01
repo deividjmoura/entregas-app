@@ -5,7 +5,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiClient {
   static const _storage = FlutterSecureStorage();
   static const String _tokenKey = 'auth_token';
-  static const String baseUrl = 'https://seu-backend.com/api';
+
+  // URL correta da API
+  static const String baseUrl = 'https://entregas-teste.vercel.app/api';
 
   static Future<String?> getToken() async {
     return await _storage.read(key: _tokenKey);
@@ -23,29 +25,41 @@ class ApiClient {
     final token = await getToken();
     return await http.get(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
     );
   }
 
-  static Future<http.Response> post(String endpoint, {Map<String, dynamic>? body}) async {
+  static Future<http.Response> post(String endpoint,
+      {Map<String, dynamic>? body}) async {
     final token = await getToken();
     return await http.post(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
       body: body != null ? jsonEncode(body) : null,
     );
   }
 
-  static Future<http.Response> patch(String endpoint, {Map<String, dynamic>? body}) async {
+  static Future<http.Response> patch(String endpoint,
+      {Map<String, dynamic>? body}) async {
     final token = await getToken();
     return await http.patch(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
       body: body != null ? jsonEncode(body) : null,
     );
   }
 
-  // Métodos estáticos solicitados pelas telas de detalhes e ações
+  // ===================== Métodos usados pelas telas =====================
+
   static Future<void> assumirSolicitacao(String id) async {
     await post('/solicitacoes/$id/assumir');
   }
@@ -59,6 +73,8 @@ class ApiClient {
   }
 
   static Future<bool> validarCodigoAcesso(String codigo) async {
-    return codigo.isNotEmpty;
+    // TODO: chamar a rota real de validação quando existir
+    // Por enquanto só verifica se não está vazio
+    return codigo.trim().isNotEmpty;
   }
 }
