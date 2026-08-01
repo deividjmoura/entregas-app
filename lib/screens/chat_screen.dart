@@ -30,7 +30,10 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _carregarMensagens();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) => _carregarMensagens(silent: true));
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _carregarMensagens(silent: true),
+    );
   }
 
   @override
@@ -42,12 +45,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _carregarMensagens({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
-    final lista = await SolicitacaoService.listarMensagens(widget.solicitacao.id);
-    if (mounted) {
-      setState(() {
-        _mensagens = lista;
-        _loading = false;
-      });
+
+    try {
+      final lista = await SolicitacaoService.listarMensagens(widget.solicitacao.id);
+      if (mounted) {
+        setState(() {
+          _mensagens = lista;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -56,26 +66,33 @@ class _ChatScreenState extends State<ChatScreen> {
     if (texto.isEmpty) return;
 
     setState(() => _sending = true);
-    final ok = await SolicitacaoService.enviarMensagem(widget.solicitacao.id, texto);
-    setState(() => _sending = false);
 
-    if (ok) {
+    try {
+      await SolicitacaoService.enviarMensagem(widget.solicitacao.id, texto);
       _controller.clear();
-      _carregarMensagens(silent: true);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível enviar a mensagem (chat indisponível).')),
-      );
+      await _carregarMensagens(silent: true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível enviar a mensagem (chat indisponível).'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final meuNome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final meuNome = AuthService().currentUser?.displayName ?? 'Entregador';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Chat #${widget.solicitacao.id.substring(0, widget.solicitacao.id.length > 6 ? 6 : widget.solicitacao.id.length)}'),
+        title: Text(
+          'Chat #${widget.solicitacao.id.substring(0, widget.solicitacao.id.length > 6 ? 6 : widget.solicitacao.id.length)}',
+        ),
       ),
       body: Column(
         children: [
@@ -151,6 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
+                    onSubmitted: (_) => _enviar(),
                   ),
                 ),
                 const SizedBox(width: 8),
