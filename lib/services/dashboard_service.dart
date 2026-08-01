@@ -1,4 +1,3 @@
-import '../models/solicitacao.dart';
 import 'solicitacao_service.dart';
 
 class DashboardMetricas {

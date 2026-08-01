@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../providers/tema_provider.dart';
 import 'solicitante_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import '../services/solicitacao_service.dart';
 import '../services/auth_service.dart';
 import '../utils/constantes.dart';
 import 'login_screen.dart';
+import 'dashboard_screen.dart';
 import 'solicitacao_detalhe_screen.dart'; // ajuste o nome se o seu arquivo for diferente
 
 class FilaScreen extends StatefulWidget {
@@ -144,7 +147,21 @@ class _FilaScreenState extends State<FilaScreen> {
               );
             },
           ),
+                    IconButton(
+            icon: const Icon(Icons.dashboard_outlined),
+            tooltip: 'Painel geral',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+            },
+          ),
           IconButton(
+            icon: Icon(context.watch<TemaProvider>().icone),
+            tooltip: 'Alternar tema',
+            onPressed: () => context.read<TemaProvider>().ciclar(),
+          ),
+IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => _carregarDados(),
           ),

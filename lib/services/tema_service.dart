@@ -3,7 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class TemaService {
   static const _storage = FlutterSecureStorage();
-  static const _key = 'theme_mode'; // system | light | dark
+  static const _key = 'theme_mode';
 
   static Future<ThemeMode> carregar() async {
     final v = await _storage.read(key: _key);

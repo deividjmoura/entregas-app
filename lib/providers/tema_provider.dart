@@ -30,10 +30,4 @@ class TemaProvider extends ChangeNotifier {
         ThemeMode.dark => Icons.dark_mode,
         ThemeMode.system => Icons.brightness_auto,
       };
-
-  String get label => switch (_mode) {
-        ThemeMode.light => 'Claro',
-        ThemeMode.dark => 'Escuro',
-        ThemeMode.system => 'Sistema',
-      };
 }

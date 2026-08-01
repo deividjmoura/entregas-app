@@ -5,6 +5,12 @@ import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
 import '../services/solicitacao_service.dart';
 import '../utils/constantes.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../utils/image_utils.dart';
+import '../services/preferencias_service.dart';
+import '../providers/tema_provider.dart';
+import 'dashboard_screen.dart';
 import 'fila_screen.dart';
 import 'login_screen.dart';
 
@@ -29,6 +35,9 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
   String _tipo = 'COMPONENTE_FISICO';
   String _urgencia = 'MEDIA';
   bool _enviando = false;
+  String? _fotoBase64;
+  Map<String, int> _naoLidas = {};
+
 
   @override
   void initState() {
@@ -47,6 +56,10 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
 
   Future<void> _iniciar() async {
     _nome = await AuthService().entregadorNome;
+    final linha = await PreferenciasService.getLinhaPadrao();
+    final rack = await PreferenciasService.getRackPadrao();
+    if (linha != null && linha.isNotEmpty) _destinoCtrl.text = linha;
+    if (rack != null && rack.isNotEmpty) _rackCtrl.text = rack;
     await _carregar();
     _polling = Timer.periodic(const Duration(seconds: 5), (_) => _carregar(silent: true));
   }
@@ -63,9 +76,16 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
         if (aAtiva != bAtiva) return aAtiva.compareTo(bAtiva);
         return b.criadaEm.compareTo(a.criadaEm);
       });
+      Map<String, int> naoLidas = {};
+      try {
+        if (_nome != null) {
+          naoLidas = await SolicitacaoService.minhasMensagensNaoLidas(_nome!);
+        }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _minhas = lista;
+          _naoLidas = naoLidas;
           _loading = false;
         });
       }
@@ -101,11 +121,13 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
         rackOuSlide: _rackCtrl.text.trim().isEmpty ? null : _rackCtrl.text.trim(),
         urgencia: _urgencia,
         solicitanteNome: _nome!,
+        fotoBase64: _fotoBase64,
       );
       if (criada != null) {
         _descricaoCtrl.clear();
         _rackCtrl.clear();
         _urgencia = 'MEDIA';
+        _fotoBase64 = null;
         setState(() => _mostrarForm = false);
         await _carregar();
         if (mounted) {
@@ -223,6 +245,20 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
                 MaterialPageRoute(builder: (_) => const FilaScreen()),
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.dashboard_outlined),
+            tooltip: 'Painel geral',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: Icon(context.watch<TemaProvider>().icone),
+            tooltip: 'Alternar tema',
+            onPressed: () => context.read<TemaProvider>().ciclar(),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: () => _carregar()),
           IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
@@ -397,6 +433,74 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
               onChanged: (v) => setState(() => _urgencia = v ?? 'MEDIA'),
             ),
             const SizedBox(height: 14),
+
+            // Foto opcional
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final src = await showModalBottomSheet<ImageSource>(
+                      context: context,
+                      builder: (ctx) => SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.photo_library),
+                              title: const Text('Galeria'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, ImageSource.gallery),
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.camera_alt),
+                              title: const Text('Câmera'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, ImageSource.camera),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                    if (src == null) return;
+                    final data =
+                        await ImageUtils.escolherEConverter(source: src);
+                    if (!mounted) return;
+                    setState(() => _fotoBase64 = data);
+                  },
+                  icon: Icon(_fotoBase64 != null
+                      ? Icons.check_circle
+                      : Icons.add_a_photo),
+                  label: Text(
+                      _fotoBase64 != null ? 'Foto anexada' : 'Anexar foto'),
+                ),
+                if (_fotoBase64 != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Remover foto',
+                    onPressed: () => setState(() => _fotoBase64 = null),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  await PreferenciasService.setLinhaPadrao(_destinoCtrl.text);
+                  await PreferenciasService.setRackPadrao(_rackCtrl.text);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Destino salvo como padrão')),
+                  );
+                },
+                icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                label: const Text('Salvar destino como padrão'),
+              ),
+            ),
+            const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _enviando ? null : _criar,
               icon: _enviando
