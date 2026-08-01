@@ -20,6 +20,8 @@ class _FilaScreenState extends State<FilaScreen> {
   bool _isLoading = true;
   String? _nomeEntregador;
   Timer? _pollingTimer;
+  String? _expandedId; // card expandido na fila
+  bool _acaoLoading = false;
 
   @override
   void initState() {
@@ -222,144 +224,394 @@ class _FilaScreenState extends State<FilaScreen> {
     );
   }
 
+
   Widget _buildCard(Solicitacao sol) {
     final corUrgencia = AppConstantes.corUrgencia(sol.urgencia);
     final labelUrgencia = AppConstantes.formatarUrgencia(sol.urgencia);
     final labelStatus = AppConstantes.formatarStatus(sol.status);
+    final expandido = _expandedId == sol.id;
+    final status = sol.status.toUpperCase();
+    final podeAssumir = status == 'PENDENTE';
+    final ehMeu = sol.entregadorNome != null &&
+        sol.entregadorNome!.isNotEmpty &&
+        (_nomeEntregador != null &&
+            sol.entregadorNome!.toLowerCase() == _nomeEntregador!.toLowerCase());
+    final podeAgir = (status == 'EM_CURSO' ||
+            status == 'EM_ROTA' ||
+            status == 'EM_BAIXA') &&
+        ehMeu;
+    final podeConfirmar = status == 'EM_ROTA' && ehMeu;
+    final deOutro = (status == 'EM_CURSO' ||
+            status == 'EM_ROTA' ||
+            status == 'EM_BAIXA') &&
+        !ehMeu &&
+        sol.entregadorNome != null;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      elevation: 1.5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: InkWell(
+      elevation: expandido ? 3 : 1.5,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        onTap: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SolicitacaoDetalheScreen(
-                solicitacao: sol,
-                onUpdated: () => _carregarDados(silent: true),
+        side: expandido
+            ? BorderSide(color: Colors.blue.shade200, width: 1.5)
+            : BorderSide.none,
+      ),
+      child: Column(
+        children: [
+          // Área clicável: expande/recolhe
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              setState(() {
+                _expandedId = expandido ? null : sol.id;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Linha 1: urgência + status + timer
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: corUrgencia,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          labelUrgencia,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppConstantes.corStatus(sol.status)
+                              .withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          labelStatus,
+                          style: TextStyle(
+                            color: AppConstantes.corStatus(sol.status),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(Icons.timer_outlined,
+                          size: 14, color: Colors.grey.shade600),
+                      const SizedBox(width: 3),
+                      Text(
+                        sol.tempoEsperaFormatado,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        expandido
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: Colors.grey.shade500,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    sol.descricaoItem,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: expandido ? 4 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (sol.rackOuSlide != null &&
+                          sol.rackOuSlide!.isNotEmpty) ...[
+                        Icon(Icons.view_module,
+                            size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 3),
+                        Text(
+                          sol.rackOuSlide!,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade700),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Icon(Icons.person_outline,
+                          size: 14, color: Colors.grey.shade600),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          sol.solicitanteNome,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade700),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (sol.entregadorNome != null &&
+                      sol.entregadorNome!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.delivery_dining,
+                            size: 14, color: Colors.blue.shade600),
+                        const SizedBox(width: 3),
+                        Text(
+                          sol.entregadorNome!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
             ),
-          );
-          _carregarDados(silent: true);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Linha 1: urgência + status + timer
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: corUrgencia,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      labelUrgencia,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppConstantes.corStatus(sol.status).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      labelStatus,
-                      style: TextStyle(
-                        color: AppConstantes.corStatus(sol.status),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.timer_outlined, size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 3),
-                  Text(
-                    sol.tempoEsperaFormatado,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // Descrição do item
-              Text(
-                sol.descricaoItem,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              const SizedBox(height: 6),
-
-              // Rack / Slide + Solicitante
-              Row(
-                children: [
-                  if (sol.rackOuSlide != null && sol.rackOuSlide!.isNotEmpty) ...[
-                    Icon(Icons.view_module, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 3),
-                    Text(
-                      sol.rackOuSlide!,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Icon(Icons.person_outline, size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 3),
-                  Expanded(
-                    child: Text(
-                      sol.solicitanteNome,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Entregador (se já tiver)
-              if (sol.entregadorNome != null && sol.entregadorNome!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.delivery_dining, size: 14, color: Colors.blue.shade600),
-                    const SizedBox(width: 3),
-                    Text(
-                      sol.entregadorNome!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
           ),
-        ),
+
+          // Área expandida: detalhes extras + botões de ação
+          if (expandido) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Info extra
+                  if (sol.enderecoEstoque != null &&
+                      sol.enderecoEstoque!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Icon(Icons.inventory_2,
+                              size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Estoque: ${sol.enderecoEstoque}',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade800),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.category,
+                          size: 14, color: Colors.grey.shade600),
+                      const SizedBox(width: 6),
+                      Text(
+                        AppConstantes.formatarTipo(sol.tipo),
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey.shade800),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Botões de ação
+                  if (_acaoLoading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else if (podeAssumir)
+                    ElevatedButton.icon(
+                      onPressed: () => _acaoAssumir(sol),
+                      icon: const Icon(Icons.handyman, size: 18),
+                      label: const Text('Aceitar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    )
+                  else if (podeAgir) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: status == 'EM_ROTA'
+                                ? null
+                                : () => _acaoStatus(sol, 'EM_ROTA'),
+                            icon: const Icon(Icons.route, size: 16),
+                            label: const Text('Em rota'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: status == 'EM_BAIXA'
+                                ? null
+                                : () => _acaoStatus(sol, 'EM_BAIXA'),
+                            icon: const Icon(Icons.inventory, size: 16),
+                            label: const Text('Em baixa'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (podeConfirmar) ...[
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => _acaoConfirmar(sol),
+                        icon: const Icon(Icons.check_circle, size: 18),
+                        label: const Text('Confirmar entrega'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ] else if (deOutro)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock,
+                              size: 16, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Com ${sol.entregadorNome}',
+                              style: TextStyle(
+                                  color: Colors.orange.shade900, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
+
+  Future<void> _acaoAssumir(Solicitacao sol) async {
+    final nome = _nomeEntregador ?? await AuthService().entregadorNome;
+    if (nome == null || nome.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Identifique-se antes de aceitar')),
+      );
+      return;
+    }
+    setState(() => _acaoLoading = true);
+    try {
+      final r = await SolicitacaoService.assumir(sol.id, nome);
+      if (!mounted) return;
+      if (r == AcaoResultado.sucesso) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Solicitação aceita!'),
+              backgroundColor: Colors.green),
+        );
+        setState(() => _expandedId = null);
+        await _carregarDados(silent: true);
+      } else if (r == AcaoResultado.conflito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Já foi assumida por outro entregador'),
+              backgroundColor: Colors.orange),
+        );
+        await _carregarDados(silent: true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Erro ao aceitar'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acaoLoading = false);
+    }
+  }
+
+  Future<void> _acaoStatus(Solicitacao sol, String status) async {
+    setState(() => _acaoLoading = true);
+    try {
+      final r = await SolicitacaoService.atualizarStatus(sol.id, status);
+      if (!mounted) return;
+      if (r == AcaoResultado.sucesso) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(status == 'EM_ROTA'
+                ? 'Marcado em rota'
+                : 'Marcado em baixa'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _carregarDados(silent: true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Erro ao atualizar'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acaoLoading = false);
+    }
+  }
+
+  Future<void> _acaoConfirmar(Solicitacao sol) async {
+    setState(() => _acaoLoading = true);
+    try {
+      final r = await SolicitacaoService.confirmar(sol.id);
+      if (!mounted) return;
+      if (r == AcaoResultado.sucesso) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Entrega confirmada!'),
+              backgroundColor: Colors.green),
+        );
+        setState(() => _expandedId = null);
+        await _carregarDados(silent: true);
+      } else if (r == AcaoResultado.conflito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Só confirma quando estiver Em rota'),
+              backgroundColor: Colors.orange),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Erro ao confirmar'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acaoLoading = false);
+    }
+  }
+
 
   /// Gera uma cor estável a partir do nome do local (igual ao web)
   Color _corParaLocal(String nome) {
