@@ -1,3 +1,4 @@
+import 'chat_screen.dart';
 import '../services/presenca_service.dart';
 import '../widgets/elapsed_time.dart';
 import 'package:provider/provider.dart';
@@ -67,10 +68,29 @@ class _FilaScreenState extends State<FilaScreen> {
 
       // 1º prioridade (urgência), 2º tempo de espera (mais antiga primeiro)
       lista.sort((a, b) {
+        // 1) Minhas em andamento primeiro
+        // 2) Depois pendentes
+        // 3) Dentro do grupo: urgência (maior primeiro), depois mais antigas
+        int grupo(Solicitacao s) {
+          final st = s.status.toUpperCase();
+          final minha = s.entregadorNome != null &&
+              _nomeEntregador != null &&
+              s.entregadorNome == _nomeEntregador;
+          if (minha &&
+              (st == 'EM_CURSO' || st == 'EM_ROTA' || st == 'EM_BAIXA')) {
+            return 0;
+          }
+          if (st == 'PENDENTE') return 1;
+          if (st == 'EM_CURSO' || st == 'EM_ROTA' || st == 'EM_BAIXA') return 2;
+          return 3;
+        }
+
+        final g = grupo(a).compareTo(grupo(b));
+        if (g != 0) return g;
         final pesoA = AppConstantes.pesoUrgencia(a.urgencia);
         final pesoB = AppConstantes.pesoUrgencia(b.urgencia);
-        if (pesoA != pesoB) return pesoB.compareTo(pesoA); // maior urgência primeiro
-        return a.criadaEm.compareTo(b.criadaEm); // mais antiga primeiro
+        if (pesoA != pesoB) return pesoB.compareTo(pesoA);
+        return a.criadaEm.compareTo(b.criadaEm);
       });
 
       if (mounted) {
@@ -493,6 +513,20 @@ IconButton(
                       ),
                     )
                   else if (podeAgir) ...[
+
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(solicitacao: sol),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat, size: 16),
+                      label: const Text('Chat'),
+                    ),
+                    const SizedBox(height: 8),
+
                     Row(
                       children: [
                         Expanded(
@@ -533,7 +567,7 @@ IconButton(
                     TextButton.icon(
                       onPressed: () => _abrirDetalhe(sol),
                       icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Detalhe / estoque / chat'),
+                      label: const Text('Detalhe / estoque'),
                     ),
                   ] else if (deOutro)
                     Container(

@@ -1,3 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+echo "==> [34] Chat visível, ordem da fila, painel só do dia + chips menores..."
+
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+# ========== FILA ==========
+p = Path("lib/screens/fila_screen.dart")
+t = p.read_text()
+
+# 1) Import chat
+if "chat_screen.dart" not in t:
+    t = "import 'chat_screen.dart';\n" + t
+
+# 2) Sort: minhas em andamento primeiro, depois pendentes por urgência
+old_sort = None
+# Replace the lista.sort block in _carregarDados
+sort_pat = re.compile(
+    r"lista\.sort\(\(a, b\) \{.*?\n\s*\}\);",
+    re.DOTALL,
+)
+
+new_sort = """lista.sort((a, b) {
+        // 1) Minhas em andamento primeiro
+        // 2) Depois pendentes
+        // 3) Dentro do grupo: urgência (maior primeiro), depois mais antigas
+        int grupo(Solicitacao s) {
+          final st = s.status.toUpperCase();
+          final minha = s.entregadorNome != null &&
+              _nomeEntregador != null &&
+              s.entregadorNome == _nomeEntregador;
+          if (minha &&
+              (st == 'EM_CURSO' || st == 'EM_ROTA' || st == 'EM_BAIXA')) {
+            return 0;
+          }
+          if (st == 'PENDENTE') return 1;
+          if (st == 'EM_CURSO' || st == 'EM_ROTA' || st == 'EM_BAIXA') return 2;
+          return 3;
+        }
+
+        final g = grupo(a).compareTo(grupo(b));
+        if (g != 0) return g;
+        final pesoA = AppConstantes.pesoUrgencia(a.urgencia);
+        final pesoB = AppConstantes.pesoUrgencia(b.urgencia);
+        if (pesoA != pesoB) return pesoB.compareTo(pesoA);
+        return a.criadaEm.compareTo(b.criadaEm);
+      });"""
+
+m = sort_pat.search(t)
+if m:
+    t = t[:m.start()] + new_sort + t[m.end():]
+    print("OK: ordenacao da fila atualizada")
+else:
+    print("AVISO: lista.sort nao encontrado — confira manualmente")
+
+# 3) Botao Chat direto no card expandido quando pode agir
+if "ChatScreen(solicitacao:" not in t and "ChatScreen(solicitacao: sol)" not in t:
+    chat_btn = """
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(solicitacao: sol),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat, size: 16),
+                      label: const Text('Chat'),
+                    ),
+                    const SizedBox(height: 8),
+"""
+    # Insert when podeAgir section starts
+    if "else if (podeAgir) ...[" in t:
+        t = t.replace(
+            "else if (podeAgir) ...[",
+            "else if (podeAgir) ...[\n" + chat_btn,
+            1,
+        )
+        print("OK: botao Chat no card expandido (podeAgir)")
+    elif "if (podeConfirmar)" in t:
+        t = t.replace(
+            "if (podeConfirmar)",
+            chat_btn + "                    if (podeConfirmar)",
+            1,
+        )
+        print("OK: botao Chat antes de confirmar")
+    else:
+        print("AVISO: nao inseriu botao Chat automatico")
+
+# Also show chat in detalhe button label clearer
+t = t.replace(
+    "label: const Text('Detalhe / estoque / chat')",
+    "label: const Text('Detalhe / estoque')",
+)
+
+# Group sort: prefer locals that have "minhas" active
+# Optional enhance locais.sort - skip if complex
+
+p.write_text(t)
+print("fila_screen salva")
+
+# ========== DETALHE: garantir Chat ==========
+pd = Path("lib/screens/solicitacao_detalhe_screen.dart")
+if pd.exists():
+    td = pd.read_text()
+    if "chat_screen.dart" not in td:
+        td = "import 'chat_screen.dart';\n" + td
+    if "ChatScreen(" not in td:
+        btn = """
+                  if (_item.status.toUpperCase() == 'EM_CURSO' ||
+                      _item.status.toUpperCase() == 'EM_ROTA' ||
+                      _item.status.toUpperCase() == 'EM_BAIXA') ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(solicitacao: _item),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat),
+                      label: const Text('Abrir chat'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+"""
+        if "if (podeAgir)" in td:
+            td = td.replace("if (podeAgir)", btn + "                  if (podeAgir)", 1)
+            print("OK: Chat no detalhe")
+        elif "if (podeAssumir)" in td:
+            td = td.replace("if (podeAssumir)", btn + "                  if (podeAssumir)", 1)
+            print("OK: Chat no detalhe (antes assumir)")
+        else:
+            print("AVISO: detalhe sem ancora para Chat")
+    else:
+        print("INFO: ChatScreen ja no detalhe")
+    pd.write_text(td)
+
+# ========== SOLICITANTE: trailing actions ==========
+ps = Path("lib/screens/solicitante_screen.dart")
+if ps.exists():
+    ts = ps.read_text()
+    if "solicitante_item_actions.dart" not in ts:
+        ts = "import '../widgets/solicitante_item_actions.dart';\n" + ts
+    if "SolicitanteItemActions" not in ts or ts.count("SolicitanteItemActions") < 2:
+        # Try inject trailing on ListTile
+        if "ListTile(" in ts and "SolicitanteItemActions(" not in ts:
+            # replace first few ListTile( with trailing - risky
+            # Look for Card children with title related to descricaoItem
+            print("INFO: no solicitante, adicione trailing SolicitanteItemActions nos cards")
+        # Soft: if there's IconButton chat already skip
+    # Ensure chat only when in progress for solicitante too - widget already handles
+    ps.write_text(ts)
+
+print("Done fila/detalhe")
+PY
+
+# ========== DASHBOARD completo (só do dia + chips compactos) ==========
+cat > lib/screens/dashboard_screen.dart << 'DART'
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
@@ -309,3 +472,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+DART
+
+echo "OK: dashboard_screen.dart reescrito"
+echo ""
+echo "flutter analyze lib/screens/fila_screen.dart lib/screens/dashboard_screen.dart lib/screens/solicitacao_detalhe_screen.dart"
+flutter analyze lib/screens/fila_screen.dart lib/screens/dashboard_screen.dart lib/screens/solicitacao_detalhe_screen.dart 2>&1 | tail -25 || true

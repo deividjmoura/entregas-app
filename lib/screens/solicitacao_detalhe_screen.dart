@@ -409,6 +409,23 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                     ),
                   ],
 
+                  
+                  if (_item.status.toUpperCase() == 'EM_CURSO' ||
+                      _item.status.toUpperCase() == 'EM_ROTA' ||
+                      _item.status.toUpperCase() == 'EM_BAIXA') ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(solicitacao: _item),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat),
+                      label: const Text('Abrir chat'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (podeAgir) ...[
                     Row(
                       children: [
