@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
 import '../services/solicitacao_service.dart';
 import '../services/pusher_service.dart';
+import '../utils/constantes.dart';
+import 'solicitacao_detalhe_screen.dart';
 
 class FilaScreen extends StatefulWidget {
   const FilaScreen({super.key});
@@ -14,10 +16,6 @@ class _FilaScreenState extends State<FilaScreen> {
   List<Solicitacao> _itens = [];
   bool _carregando = true;
   String? _erro;
-
-  // TODO: conferir com o backend se existem outros status além destes
-  // (ex: ENTREGUE, CANCELADA) e completar a lista.
-  static const _statusDisponiveis = ['PENDENTE', 'EM_ROTA', 'EM_CURSO', 'EM_BAIXA'];
 
   @override
   void initState() {
@@ -78,7 +76,7 @@ class _FilaScreenState extends State<FilaScreen> {
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Alterar status'),
-        children: _statusDisponiveis.map((s) {
+        children: statusDisponiveis.map((s) {
           return SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, s),
             child: Row(
@@ -132,15 +130,14 @@ class _FilaScreenState extends State<FilaScreen> {
     }
   }
 
-  Color _corUrgencia(String urgencia) {
-    switch (urgencia) {
-      case 'CRITICA':
-      case 'LINHA_PARADA':
-        return Colors.red;
-      case 'MEDIA':
-        return Colors.orange;
-      default:
-        return Colors.green;
+  Future<void> _abrirDetalhe(Solicitacao item) async {
+    final alterado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => SolicitacaoDetalheScreen(solicitacao: item),
+      ),
+    );
+    if (alterado == true) {
+      await _carregarInicial();
     }
   }
 
@@ -162,8 +159,9 @@ class _FilaScreenState extends State<FilaScreen> {
           itemBuilder: (context, index) {
             final item = _itens[index];
             return ListTile(
+              onTap: () => _abrirDetalhe(item),
               leading: CircleAvatar(
-                backgroundColor: _corUrgencia(item.urgencia),
+                backgroundColor: corUrgencia(item.urgencia),
                 child: Text(item.urgencia[0]),
               ),
               title: Text(item.descricaoItem),
