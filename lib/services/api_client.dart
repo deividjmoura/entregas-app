@@ -59,7 +59,19 @@ class ApiClient {
     );
   }
 
-  // ===================== Métodos usados pelas telas =====================
+  
+  static Future<http.Response> delete(String endpoint) async {
+    final token = await getToken();
+    return await http.delete(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
+    );
+  }
+
+// ===================== Métodos usados pelas telas =====================
 
   static Future<void> assumirSolicitacao(String id) async {
     await post('/solicitacoes/$id/assumir');

@@ -3,30 +3,82 @@ import '../models/solicitacao.dart';
 import '../models/mensagem.dart';
 import 'api_client.dart';
 
-/// Resultado detalhado de uma ação
-enum AcaoResultado {
-  sucesso,
-  conflito,
-  erro,
-}
+enum AcaoResultado { sucesso, conflito, erro }
 
 class SolicitacaoService {
   // ===================== LISTAGEM =====================
 
-  static Future<List<Solicitacao>> listar() async {
-    final response = await ApiClient.get('/solicitacoes');
+  static Future<List<Solicitacao>> listar({String? status, String? q}) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (q != null && q.isNotEmpty) params['q'] = q;
+
+    final query = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+
+    final response = await ApiClient.get('/solicitacoes$query');
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
       return data
           .map((e) => Solicitacao.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception('Falha ao listar solicitações (${response.statusCode})');
+    throw Exception('Falha ao listar (${response.statusCode})');
   }
 
   static Future<List<Solicitacao>> getSolicitacoes() => listar();
 
-  // ===================== AÇÕES PRINCIPAIS =====================
+  /// Lista só as solicitações de um solicitante específico
+  static Future<List<Solicitacao>> listarMinhas(String solicitanteNome) async {
+    final response = await ApiClient.get(
+      '/solicitacoes?solicitanteNome=${Uri.encodeComponent(solicitanteNome)}',
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data
+          .map((e) => Solicitacao.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception('Falha ao listar minhas (${response.statusCode})');
+  }
+
+  // ===================== CRIAR =====================
+
+  /// POST /solicitacoes
+  static Future<Solicitacao?> criar({
+    required String tipo,
+    required String descricaoItem,
+    required String localDestino,
+    String? rackOuSlide,
+    required String urgencia,
+    required String solicitanteNome,
+    String? fotoBase64,
+  }) async {
+    final body = <String, dynamic>{
+      'tipo': tipo,
+      'descricaoItem': descricaoItem.trim().toUpperCase(),
+      'localDestino': localDestino.trim().toUpperCase(),
+      'urgencia': urgencia,
+      'solicitanteNome': solicitanteNome.trim(),
+    };
+    if (rackOuSlide != null && rackOuSlide.trim().isNotEmpty) {
+      body['rackOuSlide'] = rackOuSlide.trim().toUpperCase();
+    }
+    if (fotoBase64 != null && fotoBase64.isNotEmpty) {
+      body['foto'] = fotoBase64;
+    }
+
+    final response = await ApiClient.post('/solicitacoes', body: body);
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Solicitacao.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    return null;
+  }
+
+  // ===================== AÇÕES ENTREGADOR =====================
 
   static Future<AcaoResultado> assumir(String id, String entregadorNome) async {
     try {
@@ -74,7 +126,37 @@ class SolicitacaoService {
     }
   }
 
-  // ===================== ENDEREÇO DE ESTOQUE =====================
+  /// PATCH urgência (solicitante pode alterar)
+  static Future<AcaoResultado> alterarUrgencia(
+    String id,
+    String urgencia,
+  ) async {
+    try {
+      final response = await ApiClient.patch(
+        '/solicitacoes/$id',
+        body: {'urgencia': urgencia},
+      );
+      if (response.statusCode == 200) return AcaoResultado.sucesso;
+      return AcaoResultado.erro;
+    } catch (_) {
+      return AcaoResultado.erro;
+    }
+  }
+
+  /// DELETE — cancela a solicitação
+  static Future<AcaoResultado> cancelar(String id) async {
+    try {
+      final response = await ApiClient.delete('/solicitacoes/$id');
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return AcaoResultado.sucesso;
+      }
+      return AcaoResultado.erro;
+    } catch (_) {
+      return AcaoResultado.erro;
+    }
+  }
+
+  // ===================== ENDEREÇO =====================
 
   static Future<AcaoResultado> atualizarEndereco(
     String id, {
@@ -101,8 +183,6 @@ class SolicitacaoService {
 
   // ===================== FOTO =====================
 
-  /// GET /solicitacoes/{id}/foto
-  /// Retorna o base64 (data:image/...;base64,...) ou null se não tiver
   static Future<String?> buscarFoto(String id) async {
     try {
       final response = await ApiClient.get('/solicitacoes/$id/foto');
@@ -110,7 +190,7 @@ class SolicitacaoService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['foto'] as String?;
       }
-      return null; // 404 ou outro
+      return null;
     } catch (_) {
       return null;
     }

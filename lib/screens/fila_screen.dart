@@ -1,3 +1,4 @@
+import 'solicitante_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
