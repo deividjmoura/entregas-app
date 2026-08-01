@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/constantes.dart';
 import '../widgets/acoes_solicitacao_widget.dart';
+import '../models/solicitacao.dart';
 
 class DetalhesSolicitacaoScreen extends StatefulWidget {
   final Map<String, dynamic> solicitacao;
@@ -81,7 +82,9 @@ class _DetalhesSolicitacaoScreenState extends State<DetalhesSolicitacaoScreen> {
             ),
             const SizedBox(height: 12),
             AcoesSolicitacaoWidget(
-              solicitacao: _solicitacao,
+              solicitacao: Solicitacao.fromJson(
+                Map<String, dynamic>.from(_solicitacao),
+              ),
               onAtualizado: () {
                 Navigator.of(context).pop();
               },

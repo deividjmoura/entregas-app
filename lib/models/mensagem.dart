@@ -1,33 +1,30 @@
 class Mensagem {
   final String id;
-  final String solicitacaoId;
   final String texto;
   final String autorNome;
-  final String autorTipo; // SOLICITANTE | ENTREGADOR
   final DateTime criadaEm;
+  final bool lida;
 
   Mensagem({
     required this.id,
-    required this.solicitacaoId,
     required this.texto,
     required this.autorNome,
-    required this.autorTipo,
     required this.criadaEm,
+    this.lida = false,
   });
 
   factory Mensagem.fromJson(Map<String, dynamic> json) {
     return Mensagem(
       id: json['id']?.toString() ?? '',
-      solicitacaoId: json['solicitacaoId']?.toString() ?? '',
-      texto: json['texto']?.toString() ?? '',
-      autorNome: json['autorNome']?.toString() ?? 'Anônimo',
-      autorTipo: json['autorTipo']?.toString() ?? 'ENTREGADOR',
+      texto: json['texto']?.toString() ?? json['mensagem']?.toString() ?? '',
+      autorNome: json['autorNome']?.toString() ??
+          json['autor']?.toString() ??
+          'Anônimo',
       criadaEm: DateTime.tryParse(
-            (json['criadaEm'] ?? json['createdAt'])?.toString() ?? '',
+            (json['criadaEm'] ?? json['createdAt'] ?? '').toString(),
           ) ??
           DateTime.now(),
+      lida: json['lida'] == true,
     );
   }
-
-  bool get isEntregador => autorTipo.toUpperCase() == 'ENTREGADOR';
 }

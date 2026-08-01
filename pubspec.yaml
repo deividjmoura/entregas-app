@@ -43,6 +43,9 @@ dependencies:
   google_sign_in: ^6.2.2
   provider: ^6.1.5+1
   uuid: ^4.6.0
+  image_picker: ^1.1.2
+  flutter_local_notifications: ^19.5.0
+  audioplayers: ^6.4.0
 
 dev_dependencies:
   flutter_test:

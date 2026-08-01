@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/mensagem.dart';
 import '../models/solicitacao.dart';
@@ -15,14 +16,14 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
-  final _scrollController = ScrollController();
+  final _scroll = ScrollController();
   List<Mensagem> _mensagens = [];
   bool _loading = true;
   bool _enviando = false;
   String? _meuNome;
+  Timer? _poll;
 
-  // Chat só é permitido nestes status
-  bool get _chatDisponivel {
+  bool get _disponivel {
     final s = widget.solicitacao.status.toUpperCase();
     return s == 'EM_CURSO' || s == 'EM_ROTA' || s == 'EM_BAIXA';
   }
@@ -30,44 +31,53 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _iniciar();
+    _boot();
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     _controller.dispose();
-    _scrollController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
-  Future<void> _iniciar() async {
+  Future<void> _boot() async {
     _meuNome = await AuthService().entregadorNome;
-    await _carregarMensagens();
+    await _carregar(silent: false);
+    if (_meuNome != null) {
+      try {
+        await SolicitacaoService.marcarMensagensLidas(
+          widget.solicitacao.id,
+          _meuNome!,
+        );
+      } catch (_) {}
+    }
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) => _carregar(silent: true));
   }
 
-  Future<void> _carregarMensagens() async {
-    setState(() => _loading = true);
+  Future<void> _carregar({required bool silent}) async {
     try {
       final lista =
           await SolicitacaoService.listarMensagens(widget.solicitacao.id);
-      if (mounted) {
-        setState(() {
-          _mensagens = lista;
-          _loading = false;
-        });
-        _scrollParaFim();
-      }
+      if (!mounted) return;
+      final mudou = lista.length != _mensagens.length;
+      setState(() {
+        _mensagens = lista;
+        _loading = false;
+      });
+      if (mudou) _scrollFim();
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !silent) setState(() => _loading = false);
     }
   }
 
-  void _scrollParaFim() {
+  void _scrollFim() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
@@ -77,31 +87,25 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _enviar() async {
     final texto = _controller.text.trim();
     if (texto.isEmpty || _enviando) return;
-
     if (_meuNome == null || _meuNome!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Identifique-se antes de enviar')),
       );
       return;
     }
-
     setState(() => _enviando = true);
     _controller.clear();
-
     try {
       await SolicitacaoService.enviarMensagem(
         widget.solicitacao.id,
         texto,
         autorNome: _meuNome!,
       );
-      await _carregarMensagens();
+      await _carregar(silent: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao enviar: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Erro ao enviar: $e')),
         );
       }
     } finally {
@@ -113,82 +117,86 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Chat · ${widget.solicitacao.descricaoItem}',
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarMensagens,
-          ),
-        ],
+        title: Text('Chat · ${widget.solicitacao.descricaoItem}'),
       ),
       body: Column(
         children: [
-          // Aviso se chat não estiver disponível
-          if (!_chatDisponivel)
+          if (!_disponivel)
             Container(
               width: double.infinity,
               color: Colors.orange.shade100,
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                'Chat disponível apenas enquanto a entrega está em andamento '
-                '(Aceito / Em rota / Em baixa).\n'
-                'Status atual: ${widget.solicitacao.status}',
-                style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+              padding: const EdgeInsets.all(8),
+              child: const Text(
+                'Chat disponível apenas enquanto a entrega está em andamento.',
                 textAlign: TextAlign.center,
               ),
             ),
-
-          // Lista de mensagens
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _mensagens.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Nenhuma mensagem ainda.\nSeja o primeiro a escrever!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _mensagens.length,
+                    itemBuilder: (_, i) {
+                      final m = _mensagens[i];
+                      final eu = m.autorNome == _meuNome;
+                      return Align(
+                        alignment:
+                            eu ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                          ),
+                          decoration: BoxDecoration(
+                            color: eu
+                                ? Colors.blue.shade600
+                                : Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (!eu)
+                                Text(
+                                  m.autorNome,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              Text(
+                                m.texto,
+                                style: TextStyle(
+                                  color: eu ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _mensagens.length,
-                        itemBuilder: (context, index) {
-                          final m = _mensagens[index];
-                          final isMe = m.isEntregador &&
-                              m.autorNome == _meuNome;
-                          return _bolha(m, isMe);
-                        },
-                      ),
+                      );
+                    },
+                  ),
           ),
-
-          // Campo de envio
-          if (_chatDisponivel)
+          if (_disponivel)
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _controller,
-                        decoration: InputDecoration(
-                          hintText: 'Digite uma mensagem...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
+                        decoration: const InputDecoration(
+                          hintText: 'Mensagem...',
+                          border: OutlineInputBorder(),
+                          isDense: true,
                         ),
-                        textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _enviar(),
-                        enabled: !_enviando,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -196,12 +204,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       onPressed: _enviando ? null : _enviar,
                       icon: _enviando
                           ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.send),
                     ),
@@ -212,66 +217,5 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
-  }
-
-  Widget _bolha(Mensagem m, bool isMe) {
-    final bg = isMe ? Colors.blue.shade600 : Colors.grey.shade200;
-    final fg = isMe ? Colors.white : Colors.black87;
-    final align = isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final radius = isMe
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-          )
-        : const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomRight: Radius.circular(16),
-          );
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: align,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2, left: 4, right: 4),
-            child: Text(
-              m.autorNome,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(color: bg, borderRadius: radius),
-            child: Text(
-              m.texto,
-              style: TextStyle(color: fg, fontSize: 15),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
-            child: Text(
-              _formatarHora(m.criadaEm),
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatarHora(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 }

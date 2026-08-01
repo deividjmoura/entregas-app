@@ -6,7 +6,7 @@ import '../services/solicitacao_service.dart';
 import '../services/auth_service.dart';
 import '../utils/constantes.dart';
 import 'login_screen.dart';
-import 'solicitacao_detalhe_screen.dart'; // ajuste o nome se o seu arquivo for diferente
+ // ajuste o nome se o seu arquivo for diferente
 
 class FilaScreen extends StatefulWidget {
   const FilaScreen({super.key});
@@ -399,42 +399,24 @@ class _FilaScreenState extends State<FilaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Info extra — endereço de estoque (editável)
-                  InkWell(
-                    onTap: () => _editarEndereco(sol),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                  // Info extra
+                  if (sol.enderecoEstoque != null &&
+                      sol.enderecoEstoque!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
                         children: [
                           Icon(Icons.inventory_2,
-                              size: 16, color: Colors.grey.shade700),
+                              size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              (sol.enderecoEstoque != null &&
-                                      sol.enderecoEstoque!.isNotEmpty)
-                                  ? 'Estoque: ${sol.enderecoEstoque}'
-                                  : 'Definir endereço no estoque',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: (sol.enderecoEstoque != null &&
-                                        sol.enderecoEstoque!.isNotEmpty)
-                                    ? Colors.grey.shade800
-                                    : Colors.blue.shade700,
-                                fontWeight: (sol.enderecoEstoque == null ||
-                                        sol.enderecoEstoque!.isEmpty)
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
+                          Text(
+                            'Estoque: ${sol.enderecoEstoque}',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade800),
                           ),
-                          Icon(Icons.edit,
-                              size: 16, color: Colors.blue.shade400),
                         ],
                       ),
                     ),
-                  ),
                   Row(
                     children: [
                       Icon(Icons.category,
@@ -505,12 +487,6 @@ class _FilaScreenState extends State<FilaScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    TextButton.icon(
-                      onPressed: () => _abrirDetalhe(sol),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Detalhe / estoque / chat'),
-                    ),
                   ] else if (deOutro)
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -538,96 +514,6 @@ class _FilaScreenState extends State<FilaScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-
-  Future<void> _editarEndereco(Solicitacao sol) async {
-    final nome = _nomeEntregador ?? await AuthService().entregadorNome;
-    if (nome == null || nome.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Identifique-se antes de alterar o estoque')),
-      );
-      return;
-    }
-
-    final controller = TextEditingController(text: sol.enderecoEstoque ?? '');
-    final novo = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Endereço de estoque'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(sol.descricaoItem,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Endereço (ex: A1-03)',
-                border: OutlineInputBorder(),
-                hintText: 'A1-03',
-              ),
-              textCapitalization: TextCapitalization.characters,
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
-    );
-
-    if (novo == null) return;
-
-    setState(() => _acaoLoading = true);
-    try {
-      final r = await SolicitacaoService.atualizarEndereco(
-        sol.id,
-        enderecoEstoque: novo,
-        alteradoPor: nome,
-      );
-      if (!mounted) return;
-      if (r == AcaoResultado.sucesso) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Endereço de estoque atualizado'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        await _carregarDados(silent: true);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao atualizar endereço'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _acaoLoading = false);
-    }
-  }
-
-  void _abrirDetalhe(Solicitacao sol) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SolicitacaoDetalheScreen(
-          solicitacao: sol,
-          onUpdated: () => _carregarDados(silent: true),
-        ),
       ),
     );
   }

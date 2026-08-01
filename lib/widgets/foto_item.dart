@@ -1,22 +1,22 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/solicitacao_service.dart';
 
-/// Mostra a foto de uma solicitação (busca sob demanda).
-/// Só deve ser usado quando temFoto == true.
 class FotoItem extends StatefulWidget {
   final String solicitacaoId;
+  final double height;
 
-  const FotoItem({super.key, required this.solicitacaoId});
+  const FotoItem({super.key, required this.solicitacaoId, this.height = 220});
 
   @override
   State<FotoItem> createState() => _FotoItemState();
 }
 
 class _FotoItemState extends State<FotoItem> {
-  String? _base64;
+  Uint8List? _bytes;
   bool _loading = true;
-  bool _erro = false;
+  String? _erro;
 
   @override
   void initState() {
@@ -25,72 +25,67 @@ class _FotoItemState extends State<FotoItem> {
   }
 
   Future<void> _carregar() async {
-    final foto = await SolicitacaoService.buscarFoto(widget.solicitacaoId);
-    if (!mounted) return;
     setState(() {
-      _base64 = foto;
-      _loading = false;
-      _erro = foto == null;
+      _loading = true;
+      _erro = null;
     });
+    try {
+      final data = await SolicitacaoService.buscarFoto(widget.solicitacaoId);
+      if (data == null || data.isEmpty) {
+        setState(() {
+          _loading = false;
+          _erro = 'Sem foto';
+        });
+        return;
+      }
+      final idx = data.indexOf('base64,');
+      final raw = idx >= 0 ? data.substring(idx + 7) : data;
+      setState(() {
+        _bytes = base64Decode(raw);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _erro = 'Erro ao carregar foto';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
-        height: 180,
-        child: Center(child: CircularProgressIndicator()),
+      return SizedBox(
+        height: widget.height,
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
-
-    if (_erro || _base64 == null) {
-      return Container(
-        height: 120,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.broken_image, size: 40, color: Colors.grey.shade400),
-            const SizedBox(height: 8),
-            Text('Foto não disponível',
-                style: TextStyle(color: Colors.grey.shade600)),
-          ],
-        ),
+    if (_erro != null || _bytes == null) {
+      return SizedBox(
+        height: 48,
+        child: Center(child: Text(_erro ?? 'Sem foto', style: const TextStyle(color: Colors.grey))),
       );
     }
-
-    // Remove o prefixo data:image/...;base64, se existir
-    String data = _base64!;
-    if (data.contains(',')) {
-      data = data.split(',').last;
-    }
-
-    try {
-      final bytes = base64Decode(data);
-      return ClipRRect(
+    return GestureDetector(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            child: InteractiveViewer(
+              child: Image.memory(_bytes!, fit: BoxFit.contain),
+            ),
+          ),
+        );
+      },
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.memory(
-          bytes,
-          fit: BoxFit.cover,
+          _bytes!,
+          height: widget.height,
           width: double.infinity,
-          height: 220,
-          errorBuilder: (_, __, ___) => Container(
-            height: 120,
-            alignment: Alignment.center,
-            child: const Text('Erro ao decodificar imagem'),
-          ),
+          fit: BoxFit.cover,
         ),
-      );
-    } catch (_) {
-      return Container(
-        height: 120,
-        alignment: Alignment.center,
-        child: const Text('Erro ao processar foto'),
-      );
-    }
+      ),
+    );
   }
 }

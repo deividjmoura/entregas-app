@@ -225,7 +225,6 @@ class SolicitacaoService {
     );
   }
 
-
   // ===================== NÃO LIDAS =====================
 
   static Future<Map<String, int>> minhasMensagensNaoLidas(String nome) async {
@@ -247,3 +246,25 @@ class SolicitacaoService {
     );
   }
 }
+
+  // ===================== NÃO LIDAS =====================
+
+  static Future<Map<String, int>> minhasMensagensNaoLidas(String nome) async {
+    final response = await ApiClient.get(
+      '/solicitacoes/minhas-mensagens-nao-lidas?nome=${Uri.encodeComponent(nome)}',
+    );
+    if (response.statusCode != 200) return {};
+    final data = jsonDecode(response.body);
+    if (data is Map) {
+      return data.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+    }
+    return {};
+  }
+
+  static Future<void> marcarMensagensLidas(String solicitacaoId, String nome) async {
+    await ApiClient.post(
+      '/solicitacoes/$solicitacaoId/mensagens/lida',
+      body: {'nome': nome},
+    );
+  }
+

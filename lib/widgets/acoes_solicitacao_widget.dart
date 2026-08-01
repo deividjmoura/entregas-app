@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../services/api_client.dart';
+import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
+import '../services/solicitacao_service.dart';
+import '../utils/constantes.dart';
 
 class AcoesSolicitacaoWidget extends StatefulWidget {
-  final Map<String, dynamic> solicitacao;
+  final Solicitacao solicitacao;
   final VoidCallback onAtualizado;
 
   const AcoesSolicitacaoWidget({
@@ -18,136 +20,155 @@ class AcoesSolicitacaoWidget extends StatefulWidget {
 
 class _AcoesSolicitacaoWidgetState extends State<AcoesSolicitacaoWidget> {
   bool _loading = false;
-  String? _nomeUsuarioAtual;
+  String? _nome;
 
   @override
   void initState() {
     super.initState();
-    _carregarUsuario();
+    AuthService().entregadorNome.then((n) {
+      if (mounted) setState(() => _nome = n);
+    });
   }
 
-  Future<void> _carregarUsuario() async {
-    final nome = await AuthService().getEntregadorNome();
-    if (mounted) {
-      setState(() {
-        _nomeUsuarioAtual = nome;
-      });
-    }
-  }
-
-  // Agora aceita Future<void> em vez de Future<bool>
-  Future<void> _executarAcao(Future<void> Function() acao) async {
+  Future<void> _run(Future<AcaoResultado> Function() acao, {String okMsg = 'OK'}) async {
+    if (_loading) return;
     setState(() => _loading = true);
-
     try {
-      await acao();
-      widget.onAtualizado();
+      final r = await acao();
+      if (!mounted) return;
+      if (r == AcaoResultado.sucesso) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(okMsg), backgroundColor: Colors.green),
+        );
+        widget.onAtualizado();
+      } else if (r == AcaoResultado.conflito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Outro entregador já assumiu esta solicitação'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        widget.onAtualizado();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Falha na ação'), backgroundColor: Colors.red),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Falha ao executar ação: $e')),
+          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = widget.solicitacao;
+    final status = s.status.toUpperCase();
+
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    final id = widget.solicitacao['id']?.toString() ?? '';
-    final status = widget.solicitacao['status']?.toString().toUpperCase() ?? '';
-    final entregadorNome = widget.solicitacao['entregadorNome']?.toString();
+    final botoes = <Widget>[];
 
-    if (status == 'PENDENTE') {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
+    if (status == AppConstantes.statusPendente) {
+      botoes.add(
+        ElevatedButton.icon(
           icon: const Icon(Icons.check_circle_outline),
-          label: const Text('Aceitar (Assumir Entrega)'),
+          label: const Text('Assumir entrega'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            minimumSize: const Size.fromHeight(48),
           ),
-          onPressed: () async {
-            if (_nomeUsuarioAtual == null || _nomeUsuarioAtual!.isEmpty) {
+          onPressed: () {
+            if (_nome == null || _nome!.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Identidade do entregador não encontrada. Faça login novamente.'),
-                ),
+                const SnackBar(content: Text('Faça login novamente')),
               );
               return;
             }
-
-            // Se o ApiClient.assumirSolicitacao aceitar 2 parâmetros:
-            await _executarAcao(
-  () => ApiClient.assumirSolicitacao(id),
-);
-
-            // Se der erro de "Too many positional arguments", use a versão abaixo:
-            // await _executarAcao(() => ApiClient.assumirSolicitacao(id));
+            _run(() => SolicitacaoService.assumir(s.id, _nome!), okMsg: 'Assumida!');
           },
         ),
       );
     }
 
-    final ehMeu = entregadorNome != null &&
-        _nomeUsuarioAtual != null &&
-        entregadorNome.toLowerCase() == _nomeUsuarioAtual!.toLowerCase();
-
-    if (!ehMeu && (status == 'EM_CURSO' || status == 'EM_ROTA' || status == 'EM_BAIXA')) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          'Em andamento por: ${entregadorNome ?? "Outro entregador"}',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+    if (status == AppConstantes.statusEmCurso) {
+      botoes.add(
+        ElevatedButton.icon(
+          icon: const Icon(Icons.local_shipping),
+          label: const Text('Em rota'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.purple,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+          ),
+          onPressed: () => _run(
+            () => SolicitacaoService.atualizarStatus(s.id, AppConstantes.statusEmRota),
+            okMsg: 'Status: Em rota',
+          ),
         ),
       );
     }
 
+    if (status == AppConstantes.statusEmRota) {
+      botoes.add(
+        ElevatedButton.icon(
+          icon: const Icon(Icons.inventory_2),
+          label: const Text('Em baixa'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+          ),
+          onPressed: () => _run(
+            () => SolicitacaoService.atualizarStatus(s.id, AppConstantes.statusEmBaixa),
+            okMsg: 'Status: Em baixa',
+          ),
+        ),
+      );
+    }
+
+    if (status == AppConstantes.statusEmBaixa || status == AppConstantes.statusEmRota) {
+      botoes.add(
+        ElevatedButton.icon(
+          icon: const Icon(Icons.done_all),
+          label: const Text('Confirmar entrega'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+          ),
+          onPressed: () => _run(
+            () => SolicitacaoService.confirmar(s.id),
+            okMsg: 'Entrega confirmada!',
+          ),
+        ),
+      );
+    }
+
+    if (botoes.isEmpty) {
+      return Text(
+        'Sem ações para status ${AppConstantes.formatarStatus(status)}',
+        style: TextStyle(color: Colors.grey.shade600),
+      );
+    }
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (status == 'EM_CURSO') ...[
-          ElevatedButton(
-            onPressed: () => _executarAcao(() => ApiClient.atualizarStatus(id, 'EM_ROTA')),
-            child: const Text('Marcar Em Rota'),
-          ),
-        ],
-        if (status == 'EM_ROTA') ...[
-          ElevatedButton(
-            onPressed: () => _executarAcao(() => ApiClient.atualizarStatus(id, 'EM_BAIXA')),
-            child: const Text('Marcar Em Baixa'),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => _executarAcao(() => ApiClient.confirmarEntrega(id)),
-            child: const Text('Confirmar Entrega (Concluir)'),
-          ),
-        ],
-        if (status == 'EM_BAIXA') ...[
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => _executarAcao(() => ApiClient.confirmarEntrega(id)),
-            child: const Text('Confirmar Entrega (Concluir)'),
-          ),
+        for (var i = 0; i < botoes.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          botoes[i],
         ],
       ],
     );
