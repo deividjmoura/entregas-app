@@ -5,6 +5,9 @@ import '../utils/constantes.dart';
 import '../screens/login_screen.dart';
 import '../screens/fila_screen.dart';
 
+/// Decide a tela inicial:
+/// - Tem código de acesso + identidade → FilaScreen
+/// - Caso contrário → LoginScreen
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -26,30 +29,28 @@ class _AuthGateState extends State<AuthGate> {
     const storage = FlutterSecureStorage();
     final authService = AuthService();
 
-    // Verifica se o código de acesso da empresa já foi validado
-    final codigo = await storage.read(key: AppConstantes.storageKeyCodigoAcesso);
-
-    // Verifica se o usuário já está identificado (Google ou Visitante)
-    final nome = await authService.getEntregadorNome();
+    final codigo =
+        await storage.read(key: AppConstantes.storageKeyCodigoAcesso);
+    final nome = await authService.entregadorNome;
     final user = authService.currentUser;
 
     final temCodigo = codigo != null && codigo.isNotEmpty;
-    final temIdentificacao = (nome != null && nome.isNotEmpty) || user != null;
+    final temIdentificacao =
+        (nome != null && nome.isNotEmpty) || user != null;
 
-    setState(() {
-      // Só considera autenticado se tiver o código da empresa E uma identificação
-      _isAuthenticated = temCodigo && temIdentificacao;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isAuthenticated = temCodigo && temIdentificacao;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 

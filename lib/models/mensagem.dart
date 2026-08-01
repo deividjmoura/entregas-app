@@ -3,8 +3,8 @@ class Mensagem {
   final String solicitacaoId;
   final String texto;
   final String autorNome;
-  final String autorTipo;
-  final DateTime createdAt;
+  final String autorTipo; // SOLICITANTE | ENTREGADOR
+  final DateTime criadaEm;
 
   Mensagem({
     required this.id,
@@ -12,19 +12,22 @@ class Mensagem {
     required this.texto,
     required this.autorNome,
     required this.autorTipo,
-    required this.createdAt,
+    required this.criadaEm,
   });
 
   factory Mensagem.fromJson(Map<String, dynamic> json) {
     return Mensagem(
-      id: json['id'] ?? '',
-      solicitacaoId: json['solicitacaoId'] ?? '',
-      texto: json['texto'] ?? '',
-      autorNome: json['autorNome'] ?? 'Anônimo',
-      autorTipo: json['autorTipo'] ?? 'ENTREGADOR',
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : DateTime.now(),
+      id: json['id']?.toString() ?? '',
+      solicitacaoId: json['solicitacaoId']?.toString() ?? '',
+      texto: json['texto']?.toString() ?? '',
+      autorNome: json['autorNome']?.toString() ?? 'Anônimo',
+      autorTipo: json['autorTipo']?.toString() ?? 'ENTREGADOR',
+      criadaEm: DateTime.tryParse(
+            (json['criadaEm'] ?? json['createdAt'])?.toString() ?? '',
+          ) ??
+          DateTime.now(),
     );
   }
+
+  bool get isEntregador => autorTipo.toUpperCase() == 'ENTREGADOR';
 }

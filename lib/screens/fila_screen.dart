@@ -25,7 +25,7 @@ class _FilaScreenState extends State<FilaScreen> {
     super.initState();
     _carregarDados();
     // Atualiza a fila a cada 8 segundos (igual ao polling do web)
-    _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _carregarDados(silent: true);
     });
   }
@@ -41,7 +41,7 @@ class _FilaScreenState extends State<FilaScreen> {
 
     try {
       final nome = await AuthService().getEntregadorNome();
-      final lista = await SolicitacaoService.getSolicitacoes();
+      final lista = await SolicitacaoService.listar();
 
       // Ordena por urgência (maior peso primeiro) e depois por data de criação
       lista.sort((a, b) {

@@ -1,16 +1,34 @@
-# entregas_app
+# 📦 Entregas App
 
-A new Flutter project.
+Aplicativo Flutter para gerenciamento de entregas e solicitações em tempo real.
 
-## Getting Started
+## ✨ Funcionalidades
 
-This project is a starting point for a Flutter application.
+- Login com Firebase Authentication + Google Sign-In
+- Autenticação segura com armazenamento local
+- Fila de solicitações em tempo real (Pusher)
+- Chat integrado
+- Detalhes de solicitações
+- Interface moderna com Material 3
 
-A few resources to get you started if this is your first Flutter project:
+## 🛠️ Tecnologias
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- **Flutter** (SDK ^3.5.0)
+- **Firebase** (Auth + Core)
+- **Provider** (gerenciamento de estado)
+- **HTTP** + **Pusher Channels**
+- **Flutter Secure Storage**
+- **Google Sign-In**
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 📱 Como rodar
+
+```bash
+# Clone o repositório
+git clone https://github.com/deividjmoura/entregas-app.git
+cd entregas-app
+
+# Instale as dependências
+flutter pub get
+
+# Rode o app
+flutter run

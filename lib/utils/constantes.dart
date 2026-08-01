@@ -14,6 +14,7 @@ class AppConstantes {
   static const String statusEntregue = 'ENTREGUE';
   static const String statusCancelada = 'CANCELADA';
 
+  /// Labels iguais ao web (STATUS_LABELS)
   static const Map<String, String> statusLabels = {
     'PENDENTE': 'Pendente',
     'EM_CURSO': 'Aceito',
@@ -48,6 +49,7 @@ class AppConstantes {
   }
 
   // ===================== URGÊNCIA =====================
+  // Cores oficiais do web (URGENCIA_COR em lib/domain.ts)
   static const String urgenciaBaixa = 'BAIXA';
   static const String urgenciaMedia = 'MEDIA';
   static const String urgenciaCritica = 'CRITICA';
@@ -60,7 +62,7 @@ class AppConstantes {
     'LINHA_PARADA': 'Linha parada',
   };
 
-  /// Peso para ordenação (quanto maior, mais prioritário)
+  /// Peso para ordenação (maior = mais prioritário)
   static const Map<String, int> urgenciaPeso = {
     'LINHA_PARADA': 10,
     'CRITICA': 3,
@@ -73,6 +75,11 @@ class AppConstantes {
     return urgenciaLabels[urgencia.toUpperCase()] ?? urgencia;
   }
 
+  /// Cores oficiais do web:
+  /// LINHA_PARADA → Rose 500
+  /// CRITICA      → Amber 500
+  /// MEDIA        → Sky 500
+  /// BAIXA        → Zinc 500
   static Color corUrgencia(String? urgencia) {
     switch ((urgencia ?? '').toUpperCase()) {
       case 'LINHA_PARADA':
@@ -105,6 +112,6 @@ class AppConstantes {
   }
 
   // ===================== API =====================
-  static const String baseUrl = 'https://entregas-teste.vercel.app'; // ajuste se for outro
+  static const String baseUrl = 'https://entregas-teste.vercel.app';
   static const String apiBaseUrl = '$baseUrl/api';
 }

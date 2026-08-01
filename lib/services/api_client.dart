@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart'; // para debugPrint
 
 class ApiClient {
   static const _storage = FlutterSecureStorage();
@@ -73,8 +74,25 @@ class ApiClient {
   }
 
   static Future<bool> validarCodigoAcesso(String codigo) async {
-    // TODO: chamar a rota real de validação quando existir
-    // Por enquanto só verifica se não está vazio
-    return codigo.trim().isNotEmpty;
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/acesso'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'codigo': codigo.trim()}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final token = data['token'] as String?;
+        if (token != null && token.isNotEmpty) {
+          await setToken(token); // salva o Bearer token
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Erro ao validar código: $e');
+      return false;
+    }
   }
 }

@@ -2,13 +2,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/constantes.dart';
+import 'api_client.dart';
 
+/// Serviço de identidade do entregador.
+/// Camada 2 de autenticação (a camada 1 é o código de acesso da empresa).
 class AuthService {
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
+
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId:
-        'SEU_CLIENT_ID_WEB.apps.googleusercontent.com', // só necessário no web
-  );
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // ===================== GETTERS =====================
@@ -17,38 +21,44 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
 
-  /// Retorna true se o usuário atual é visitante (não logou com Google)
-  Future<bool> get isVisitante async {
+  /// Nome do entregador (prioridade: Google displayName → email → storage visitante)
+  Future<String?> get entregadorNome async {
     final user = currentUser;
-    if (user != null) return false; // Tem conta Google
+    if (user != null) {
+      final nome = user.displayName?.trim();
+      if (nome != null && nome.isNotEmpty) return nome;
+      final email = user.email?.trim();
+      if (email != null && email.isNotEmpty) return email;
+    }
+    return await _storage.read(key: AppConstantes.storageKeyEntregadorNome);
+  }
 
-    final nome = await getEntregadorNome();
+  /// Alias compatível com código antigo
+  Future<String?> getEntregadorNome() => entregadorNome;
+
+  Future<bool> get isVisitante async {
+    if (currentUser != null) return false;
+    final nome = await entregadorNome;
     return nome != null && nome.isNotEmpty;
   }
 
-  /// Nome do entregador (Google ou Visitante)
-  Future<String?> getEntregadorNome() async {
-    // Prioriza o nome do Google se estiver logado
-    final user = currentUser;
-    if (user != null && (user.displayName?.isNotEmpty ?? false)) {
-      return user.displayName;
-    }
-
-    // Caso contrário, pega o nome salvo no storage (visitante)
-    return await _storage.read(key: AppConstantes.storageKeyEntregadorNome);
+  Future<bool> get estaAutenticado async {
+    if (currentUser != null) return true;
+    final nome = await entregadorNome;
+    return nome != null && nome.isNotEmpty;
   }
 
   // ===================== LOGIN =====================
 
   /// Login como visitante (só salva o nome)
   Future<void> loginComNome(String nome) async {
+    final nomeLimpo = nome.trim();
+    if (nomeLimpo.isEmpty) {
+      throw Exception('Nome não pode ser vazio');
+    }
     await _storage.write(
       key: AppConstantes.storageKeyEntregadorNome,
-      value: nome.trim(),
-    );
-    await _storage.write(
-      key: AppConstantes.storageKeyToken,
-      value: 'visitante_${DateTime.now().millisecondsSinceEpoch}',
+      value: nomeLimpo,
     );
   }
 
@@ -56,23 +66,26 @@ class AuthService {
   Future<User?> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null; // Usuário cancelou
+      if (googleUser == null) return null; // usuário cancelou
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      final OAuthCredential credential = GoogleAuthProvider.credential(
+      final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential =
+      final userCredential =
           await _firebaseAuth.signInWithCredential(credential);
 
       final user = userCredential.user;
       if (user != null) {
-        // Salva o nome também no storage para facilitar
-        await loginComNome(user.displayName ?? 'Entregador Google');
+        // Persiste o nome também no storage para facilitar acesso offline
+        final nome = user.displayName?.trim().isNotEmpty == true
+            ? user.displayName!
+            : (user.email ?? 'Entregador Google');
+        await loginComNome(nome);
       }
 
       return user;
@@ -81,9 +94,10 @@ class AuthService {
     }
   }
 
-  // ===================== LOGOUT / LIMPEZA =====================
+  // ===================== LOGOUT =====================
 
-  /// Faz logout completo (Google + storage)
+  /// Logout completo: Firebase + storage de identidade
+  /// Mantém o código de acesso da empresa (não força digitar de novo)
   Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
@@ -93,23 +107,14 @@ class AuthService {
       await _firebaseAuth.signOut();
     } catch (_) {}
 
-    // Limpa dados do storage (mas mantém o código da empresa)
-    await _storage.delete(key: AppConstantes.storageKeyToken);
     await _storage.delete(key: AppConstantes.storageKeyEntregadorNome);
+    // Não remove o token de acesso da empresa de propósito
   }
 
-  /// Limpa tudo (inclusive o código da empresa) - use com cuidado
+  /// Limpa tudo (código da empresa + identidade) — use com cuidado
   Future<void> limparTudo() async {
     await signOut();
+    await ApiClient.removeToken();
     await _storage.delete(key: AppConstantes.storageKeyCodigoAcesso);
-  }
-
-  /// Verifica se o usuário está autenticado (Google ou Visitante)
-  Future<bool> estaAutenticado() async {
-    final user = currentUser;
-    if (user != null) return true;
-
-    final nome = await getEntregadorNome();
-    return nome != null && nome.isNotEmpty;
   }
 }

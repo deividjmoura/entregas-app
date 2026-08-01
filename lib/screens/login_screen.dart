@@ -19,7 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _storage = const FlutterSecureStorage();
 
   bool _isLoading = false;
-  bool _codigoValidado = false; // controla se já passou da etapa do código
+  bool _codigoValidado = false;
   bool _mostrarCampoVisitante = false;
 
   @override
@@ -28,8 +28,16 @@ class _LoginScreenState extends State<LoginScreen> {
     _verificarSeCodigoJaFoiValidado();
   }
 
+  @override
+  void dispose() {
+    _codigoController.dispose();
+    _nomeVisitanteController.dispose();
+    super.dispose();
+  }
+
   Future<void> _verificarSeCodigoJaFoiValidado() async {
-    final codigoSalvo = await _storage.read(key: AppConstantes.storageKeyCodigoAcesso);
+    final codigoSalvo =
+        await _storage.read(key: AppConstantes.storageKeyCodigoAcesso);
     if (codigoSalvo != null && codigoSalvo.isNotEmpty) {
       setState(() => _codigoValidado = true);
     }
@@ -38,9 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _validarCodigo() async {
     final codigo = _codigoController.text.trim();
     if (codigo.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o código de acesso.')),
-      );
+      _mostrarErro('Informe o código de acesso.');
       return;
     }
 
@@ -49,24 +55,19 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final valido = await ApiClient.validarCodigoAcesso(codigo);
       if (!valido) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Código de acesso inválido.')),
-          );
-        }
+        _mostrarErro('Código de acesso inválido.');
         return;
       }
 
-      // Salva o código para não pedir de novo
-      await _storage.write(key: AppConstantes.storageKeyCodigoAcesso, value: codigo);
+      // Salva o código + token de acesso
+      await _storage.write(
+        key: AppConstantes.storageKeyCodigoAcesso,
+        value: codigo,
+      );
 
       setState(() => _codigoValidado = true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao validar código: $e')),
-        );
-      }
+      _mostrarErro('Erro ao validar código: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -78,25 +79,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final user = await _authService.signInWithGoogle();
       if (user == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Login com Google cancelado.')),
-          );
-        }
+        // Usuário cancelou
         return;
       }
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const FilaScreen()),
-        );
-      }
+      _irParaFila();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro no login com Google: $e')),
-        );
-      }
+      _mostrarErro('Erro no login com Google: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -105,9 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _entrarComoVisitante() async {
     final nome = _nomeVisitanteController.text.trim();
     if (nome.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe um nome para continuar como visitante.')),
-      );
+      _mostrarErro('Informe seu nome ou apelido.');
       return;
     }
 
@@ -115,90 +101,88 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await _authService.loginComNome(nome);
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const FilaScreen()),
-        );
-      }
+      _irParaFila();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao entrar como visitante: $e')),
-        );
-      }
+      _mostrarErro('Erro: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _codigoController.dispose();
-    _nomeVisitanteController.dispose();
-    super.dispose();
+  void _irParaFila() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const FilaScreen()),
+    );
+  }
+
+  void _mostrarErro(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Entregas - Acesso'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.local_shipping_outlined, size: 80, color: Colors.blue),
-                  const SizedBox(height: 24),
+                  const Icon(Icons.local_shipping, size: 72, color: Colors.blue),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Entregas App',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _codigoValidado
+                        ? 'Identifique-se para continuar'
+                        : 'Digite o código de acesso da empresa',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey.shade600,
+                        ),
+                  ),
+                  const SizedBox(height: 32),
 
-                  // ===================== ETAPA 1: CÓDIGO DE ACESSO =====================
-                  if (!_codigoValidado) ...[
-                    const Text(
-                      'Código de Acesso',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Informe o código da empresa (só será pedido uma vez)',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 24),
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (!_codigoValidado) ...[
+                    // ========== ETAPA 1: Código de acesso ==========
                     TextField(
                       controller: _codigoController,
                       decoration: const InputDecoration(
-                        labelText: 'Código de Acesso',
+                        labelText: 'Código de acesso',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _validarCodigo(),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: _validarCodigo,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
                       ),
                       child: const Text('Validar Código'),
                     ),
-                  ]
-
-                  // ===================== ETAPA 2: OPÇÕES DE LOGIN =====================
-                  else ...[
-                    const Text(
-                      'Como deseja entrar?',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Botão Google
+                  ] else ...[
+                    // ========== ETAPA 2: Identidade ==========
                     ElevatedButton.icon(
                       icon: const Icon(Icons.login),
                       label: const Text('Entrar com Google'),
@@ -209,12 +193,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       onPressed: _loginComGoogle,
                     ),
-
                     const SizedBox(height: 16),
                     const Text('ou', textAlign: TextAlign.center),
                     const SizedBox(height: 16),
 
-                    // Visitante
                     if (!_mostrarCampoVisitante)
                       OutlinedButton.icon(
                         icon: const Icon(Icons.person_outline),
@@ -234,6 +216,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.person),
                         ),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _entrarComoVisitante(),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
@@ -255,6 +239,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ],
               ),
+            ),
+          ),
+        ),
       ),
     );
   }

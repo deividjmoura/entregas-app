@@ -1,3 +1,65 @@
+#!/bin/bash
+# scripts/06-chat.sh
+# Parte 3.3 — Chat da entrega
+# Rode DEPOIS das Partes 1 e 2 (e preferencialmente depois do 05)
+set -e
+
+echo "=============================================="
+echo "  06 - Chat da Entrega"
+echo "=============================================="
+echo ""
+
+# ============================================================
+# 1. Garante modelo de Mensagem atualizado
+# ============================================================
+echo "→ Atualizando modelo Mensagem..."
+
+mkdir -p lib/models
+
+cat > lib/models/mensagem.dart <<'EOF'
+class Mensagem {
+  final String id;
+  final String solicitacaoId;
+  final String texto;
+  final String autorNome;
+  final String autorTipo; // SOLICITANTE | ENTREGADOR
+  final DateTime criadaEm;
+
+  Mensagem({
+    required this.id,
+    required this.solicitacaoId,
+    required this.texto,
+    required this.autorNome,
+    required this.autorTipo,
+    required this.criadaEm,
+  });
+
+  factory Mensagem.fromJson(Map<String, dynamic> json) {
+    return Mensagem(
+      id: json['id']?.toString() ?? '',
+      solicitacaoId: json['solicitacaoId']?.toString() ?? '',
+      texto: json['texto']?.toString() ?? '',
+      autorNome: json['autorNome']?.toString() ?? 'Anônimo',
+      autorTipo: json['autorTipo']?.toString() ?? 'ENTREGADOR',
+      criadaEm: DateTime.tryParse(
+            (json['criadaEm'] ?? json['createdAt'])?.toString() ?? '',
+          ) ??
+          DateTime.now(),
+    );
+  }
+
+  bool get isEntregador => autorTipo.toUpperCase() == 'ENTREGADOR';
+}
+EOF
+
+echo "  ✓ mensagem.dart atualizado"
+
+# ============================================================
+# 2. Cria a tela de chat
+# ============================================================
+echo "→ Criando tela de chat..."
+
+cat > lib/screens/chat_screen.dart <<'EOF'
 import 'package:flutter/material.dart';
 import '../models/mensagem.dart';
 import '../models/solicitacao.dart';
@@ -275,3 +337,37 @@ class _ChatScreenState extends State<ChatScreen> {
     return '$h:$m';
   }
 }
+EOF
+
+echo "  ✓ chat_screen.dart criado"
+
+# ============================================================
+# 3. Instrução de integração
+# ============================================================
+echo ""
+echo "=============================================="
+echo "✅ 06 - Chat concluído!"
+echo "=============================================="
+echo ""
+echo "Arquivos criados/atualizados:"
+echo "  • lib/models/mensagem.dart"
+echo "  • lib/screens/chat_screen.dart"
+echo ""
+echo "Para abrir o chat a partir da tela de detalhe, adicione um botão:"
+echo ""
+echo "  ElevatedButton.icon("
+echo "    icon: const Icon(Icons.chat),"
+echo "    label: const Text('Abrir chat'),"
+echo "    onPressed: () {"
+echo "      Navigator.push("
+echo "        context,"
+echo "        MaterialPageRoute("
+echo "          builder: (_) => ChatScreen(solicitacao: item),"
+echo "        ),"
+echo "      );"
+echo "    },"
+echo "  ),"
+echo ""
+echo "Lembre de importar:"
+echo "  import 'chat_screen.dart';"
+echo ""
