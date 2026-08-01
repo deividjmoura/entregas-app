@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../services/dashboard_service.dart';
+import '../models/solicitacao.dart';
+import '../services/solicitacao_service.dart';
+import '../utils/constantes.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -10,10 +12,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  DashboardMetricas? _m;
+  List<Solicitacao> _todas = [];
   bool _loading = true;
   String? _erro;
   Timer? _poll;
+  final _buscaCtrl = TextEditingController();
+  String _filtroStatus = 'TODOS';
 
   @override
   void initState() {
@@ -25,16 +29,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    _buscaCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _carregar({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
     try {
-      final m = await DashboardService.carregar();
+      final lista = await SolicitacaoService.listar();
       if (!mounted) return;
       setState(() {
-        _m = m;
+        _todas = lista;
         _loading = false;
         _erro = null;
       });
@@ -47,35 +52,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _card(String titulo, String valor, Color cor, IconData icon) {
+  List<Solicitacao> get _filtradas {
+    final q = _buscaCtrl.text.trim().toLowerCase();
+    return _todas.where((s) {
+      if (_filtroStatus != 'TODOS' && s.status.toUpperCase() != _filtroStatus) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      final blob = [
+        s.descricaoItem,
+        s.localDestino,
+        s.rackOuSlide ?? '',
+        s.solicitanteNome,
+        s.entregadorNome ?? '',
+        s.enderecoEstoque ?? '',
+      ].join(' ').toLowerCase();
+      return blob.contains(q);
+    }).toList();
+  }
+
+  int get _pendentes =>
+      _todas.where((s) => s.status.toUpperCase() == 'PENDENTE').length;
+  int get _emCurso => _todas
+      .where((s) =>
+          ['EM_CURSO', 'EM_ROTA', 'EM_BAIXA'].contains(s.status.toUpperCase()))
+      .length;
+  int get _entreguesHoje {
+    final now = DateTime.now();
+    return _todas.where((s) {
+      if (s.status.toUpperCase() != 'ENTREGUE') return false;
+      final d = s.entregueEm ?? s.atualizadaEm;
+      return d.year == now.year && d.month == now.month && d.day == now.day;
+    }).length;
+  }
+
+  Widget _kpi(String title, String value, Color color, IconData icon) {
     return Card(
-      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, color: cor, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    titulo,
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              valor,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: cor,
-              ),
-            ),
+            Row(children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 12))),
+            ]),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
       ),
@@ -84,69 +110,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lista = _filtradas;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Painel geral'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _carregar(),
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: () => _carregar()),
         ],
       ),
-      body: _loading && _m == null
+      body: _loading && _todas.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : _erro != null && _m == null
+          : _erro != null && _todas.isEmpty
               ? Center(child: Text('Erro: $_erro'))
-              : RefreshIndicator(
-                  onRefresh: () => _carregar(),
-                  child: ListView(
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: 1.4,
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      child: TextField(
+                        controller: _buscaCtrl,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search),
+                          hintText: 'Buscar item, local, rack, solicitante...',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: _buscaCtrl.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _buscaCtrl.clear();
+                                    setState(() {});
+                                  },
+                                ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
                         children: [
-                          _card('Pendentes', '${_m!.pendentes}', Colors.orange, Icons.hourglass_empty),
-                          _card('Em curso', '${_m!.emCurso}', Colors.blue, Icons.local_shipping),
-                          _card('Entregues hoje', '${_m!.entreguesHoje}', Colors.green, Icons.done_all),
-                          _card('Canceladas hoje', '${_m!.canceladasHoje}', Colors.red, Icons.cancel),
+                          for (final st in [
+                            'TODOS',
+                            'PENDENTE',
+                            'EM_CURSO',
+                            'EM_ROTA',
+                            'EM_BAIXA',
+                            'ENTREGUE',
+                            'CANCELADA',
+                          ])
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: ChoiceChip(
+                                label: Text(st == 'TODOS'
+                                    ? 'Todos'
+                                    : AppConstantes.formatarStatus(st)),
+                                selected: _filtroStatus == st,
+                                onSelected: (_) =>
+                                    setState(() => _filtroStatus = st),
+                              ),
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      const Text('Por local (ativas)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      if (_m!.porLocal.isEmpty)
-                        const Text('Nenhuma ativa', style: TextStyle(color: Colors.grey))
-                      else
-                        ...(_m!.porLocal.entries.toList()
-                              ..sort((a, b) => b.value.compareTo(a.value)))
-                            .map(
-                          (e) => ListTile(
-                            dense: true,
-                            title: Text(e.key),
-                            trailing: Chip(label: Text('${e.value}')),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      const Text('Por urgência (ativas)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 8),
-                      if (_m!.porUrgencia.isEmpty)
-                        const Text('Nenhuma ativa', style: TextStyle(color: Colors.grey))
-                      else
-                        ..._m!.porUrgencia.entries.map(
-                          (e) => ListTile(
-                            dense: true,
-                            title: Text(e.key),
-                            trailing: Chip(label: Text('${e.value}')),
-                          ),
-                        ),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: GridView.count(
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        childAspectRatio: 1.3,
+                        children: [
+                          _kpi('Pendentes', '$_pendentes', Colors.orange, Icons.hourglass_empty),
+                          _kpi('Em curso', '$_emCurso', Colors.blue, Icons.local_shipping),
+                          _kpi('Entregues hoje', '$_entreguesHoje', Colors.green, Icons.done_all),
+                        ],
+                      ),
+                    ),
+                    const Divider(),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () => _carregar(),
+                        child: lista.isEmpty
+                            ? ListView(children: const [
+                                SizedBox(height: 80),
+                                Center(child: Text('Nenhum resultado')),
+                              ])
+                            : ListView.separated(
+                                itemCount: lista.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (_, i) {
+                                  final s = lista[i];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(s.descricaoItem),
+                                    subtitle: Text(
+                                      '${s.localDestino}'
+                                      '${s.rackOuSlide != null ? ' · ${s.rackOuSlide}' : ''}'
+                                      ' · ${s.solicitanteNome}',
+                                    ),
+                                    trailing: Chip(
+                                      label: Text(
+                                        AppConstantes.formatarStatus(s.status),
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      backgroundColor: AppConstantes.corStatus(s.status)
+                                          .withOpacity(0.15),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
     );
   }

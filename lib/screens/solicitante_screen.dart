@@ -1,3 +1,8 @@
+import '../services/estoque_service.dart';
+import '../widgets/solicitante_item_actions.dart';
+import 'chat_screen.dart';
+import '../widgets/foto_item.dart';
+import '../widgets/badge_nao_lidas.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +41,7 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
   String _urgencia = 'MEDIA';
   bool _enviando = false;
   String? _fotoBase64;
+  String? _sugestaoEstoque;
   Map<String, int> _naoLidas = {};
 
 
@@ -228,6 +234,20 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
     }
   }
 
+
+
+  Future<void> _buscarSugestaoEstoque(String item) async {
+    final end = await EstoqueService.ultimoEndereco(item);
+    if (!mounted) return;
+    setState(() => _sugestaoEstoque = end);
+  }
+
+  void _abrirChat(Solicitacao s) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ChatScreen(solicitacao: s)),
+    ).then((_) => _carregar(silent: true));
+  }
+
   @override
   Widget build(BuildContext context) {
     final ativas = _minhas.where((s) => !s.isFinalizada).toList();
@@ -358,7 +378,7 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _descricaoCtrl,
-              decoration: const InputDecoration(
+decoration: const InputDecoration(
                 labelText: 'Descrição do item *',
                 border: OutlineInputBorder(),
                 isDense: true,
@@ -435,7 +455,22 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
             const SizedBox(height: 14),
 
             // Foto opcional
-            Row(
+            
+            if (_sugestaoEstoque != null && _sugestaoEstoque!.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ActionChip(
+                  avatar: const Icon(Icons.inventory_2, size: 16),
+                  label: Text('Último estoque: $_sugestaoEstoque'),
+                  onPressed: () {
+                    // só informativo para o solicitante; entregador edita na fila
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Histórico: $_sugestaoEstoque')),
+                    );
+                  },
+                ),
+              ),
+Row(
               children: [
                 OutlinedButton.icon(
                   onPressed: () async {

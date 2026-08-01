@@ -1,3 +1,5 @@
+import 'chat_screen.dart';
+import '../widgets/foto_item.dart';
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
@@ -386,6 +388,12 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                     ),
                   ),
 
+                  
+                  if (item.temFoto) ...[
+                    const SizedBox(height: 12),
+                    FotoItem(solicitacaoId: item.id),
+                    const SizedBox(height: 12),
+                  ],
                   const SizedBox(height: 24),
 
                   if (podeAssumir) ...[

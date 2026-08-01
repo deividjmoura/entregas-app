@@ -1,3 +1,5 @@
+import '../services/presenca_service.dart';
+import '../widgets/elapsed_time.dart';
 import 'package:provider/provider.dart';
 import '../providers/tema_provider.dart';
 import 'solicitante_screen.dart';
@@ -25,11 +27,15 @@ class _FilaScreenState extends State<FilaScreen> {
   Timer? _pollingTimer;
   String? _expandedId; // card expandido na fila
   bool _acaoLoading = false;
+  int _online = 0;
+  Timer? _presencaTimer;
 
   @override
   void initState() {
     super.initState();
     _carregarDados();
+    _tickPresenca();
+    _presencaTimer = Timer.periodic(const Duration(seconds: 20), (_) => _tickPresenca());
     // Atualiza a fila a cada 8 segundos (igual ao polling do web)
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _carregarDados(silent: true);
@@ -39,6 +45,7 @@ class _FilaScreenState extends State<FilaScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _presencaTimer?.cancel();
     super.dispose();
   }
 
@@ -134,8 +141,8 @@ class _FilaScreenState extends State<FilaScreen> {
       appBar: AppBar(
         title: Text(
           _nomeEntregador != null
-              ? 'Fila · $_nomeEntregador'
-              : 'Fila de Entregas',
+              ? 'Fila · $_nomeEntregador · $_online online'
+              : 'Fila · $_online online',
         ),
         actions: [
                     IconButton(
@@ -559,6 +566,14 @@ IconButton(
     );
   }
 
+
+
+  Future<void> _tickPresenca() async {
+    try {
+      final n = await PresencaService.heartbeat();
+      if (mounted) setState(() => _online = n);
+    } catch (_) {}
+  }
 
   Future<void> _editarEndereco(Solicitacao sol) async {
     final nome = _nomeEntregador ?? await AuthService().entregadorNome;
