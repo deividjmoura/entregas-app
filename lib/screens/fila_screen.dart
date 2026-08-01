@@ -28,6 +28,9 @@ class _FilaScreenState extends State<FilaScreen> {
   Timer? _pollingTimer;
   String? _expandedId; // card expandido na fila
   bool _acaoLoading = false;
+  final Set<String> _selecionados = {};
+  bool _aceitandoLote = false;
+  bool _concluindoLista = false;
   int _online = 0;
   Timer? _presencaTimer;
 
@@ -98,6 +101,8 @@ class _FilaScreenState extends State<FilaScreen> {
           _nomeEntregador = nome;
           _solicitacoes = lista;
           _isLoading = false;
+          _selecionados.removeWhere((id) => !lista.any(
+              (s) => s.id == id && s.status.toUpperCase() == 'PENDENTE'));
         });
       }
     } catch (e) {
@@ -143,7 +148,21 @@ class _FilaScreenState extends State<FilaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final grupos = _agruparPorLocal(_solicitacoes);
+    // "Carrinho": minhas solicitações já aceitas e em andamento
+    final minhas = _solicitacoes.where((s) {
+      final st = s.status.toUpperCase();
+      final ehMinha = s.entregadorNome != null &&
+          s.entregadorNome!.isNotEmpty &&
+          _nomeEntregador != null &&
+          s.entregadorNome!.toLowerCase() == _nomeEntregador!.toLowerCase();
+      return ehMinha && (st == 'EM_CURSO' || st == 'EM_ROTA' || st == 'EM_BAIXA');
+    }).toList();
+
+    // Fila de despacho: só as ainda não aceitas
+    final pendentes =
+        _solicitacoes.where((s) => s.status.toUpperCase() == 'PENDENTE').toList();
+
+    final grupos = _agruparPorLocal(pendentes);
     final locais = grupos.keys.toList();
     // Locais com maior urgência / item mais antigo primeiro
     locais.sort((la, lb) {
@@ -156,6 +175,112 @@ class _FilaScreenState extends State<FilaScreen> {
       final tempoB = gb.map((s) => s.criadaEm).reduce((a, b) => a.isBefore(b) ? a : b);
       return tempoA.compareTo(tempoB);
     });
+
+    final totalEmRota = minhas.where((s) => s.status.toUpperCase() == 'EM_ROTA').length;
+
+    final List<Widget> corpo = [];
+
+    // ===== Minha lista (carrinho) — sempre no topo =====
+    if (minhas.isNotEmpty) {
+      corpo.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.shopping_cart, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Minha lista (${minhas.length})',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (totalEmRota > 0)
+                ElevatedButton.icon(
+                  onPressed: _concluindoLista ? null : () => _concluirLista(minhas),
+                  icon: _concluindoLista
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.done_all, size: 16),
+                  label: Text(_concluindoLista
+                      ? 'Concluindo...'
+                      : 'Concluir lista ($totalEmRota em rota)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+      corpo.addAll(minhas.map((sol) => _buildCard(sol)));
+    }
+
+    // ===== Fila de despacho — ainda não aceitas, logo abaixo da minha lista =====
+    corpo.add(
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Row(
+          children: [
+            const Icon(Icons.inbox, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              'Fila de despacho (${pendentes.length})',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (pendentes.isEmpty) {
+      corpo.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            'Nenhuma solicitação pendente no momento',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+        ),
+      );
+    } else {
+      for (final local in locais) {
+        final items = grupos[local]!;
+        corpo.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: _corParaLocal(local),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  local,
+                  style:
+                      const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '(${items.length})',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        );
+        corpo.addAll(items.map((sol) => _buildCard(sol)));
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -215,55 +340,51 @@ IconButton(
                         ),
                       ],
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: locais.length,
-                      itemBuilder: (context, index) {
-                        final local = locais[index];
-                        final items = grupos[local]!;
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Cabeçalho do grupo (local)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      color: _corParaLocal(local),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    local,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '(${items.length})',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Cards das solicitações deste local
-                            ...items.map((sol) => _buildCard(sol)),
-                          ],
-                        );
-                      },
+                  : ListView(
+                      padding: const EdgeInsets.only(bottom: 90),
+                      children: corpo,
                     ),
+            ),
+      bottomNavigationBar: _selecionados.isEmpty
+          ? null
+          : SafeArea(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: Theme.of(context).colorScheme.surface,
+                child: Row(
+                  children: [
+                    Text(
+                      '🛒 ${_selecionados.length} selecionado${_selecionados.length > 1 ? 's' : ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => setState(() => _selecionados.clear()),
+                      child: const Text('Limpar'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _aceitandoLote ? null : _aceitarSelecionados,
+                      icon: _aceitandoLote
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.playlist_add_check, size: 18),
+                      label: Text(_aceitandoLote
+                          ? 'Aceitando...'
+                          : 'Aceitar selecionados (${_selecionados.length})'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
     );
   }
@@ -290,15 +411,19 @@ IconButton(
             status == 'EM_BAIXA') &&
         !ehMeu &&
         sol.entregadorNome != null;
+    final selecionado = _selecionados.contains(sol.id);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       elevation: expandido ? 3 : 1.5,
+      color: selecionado ? Colors.amber.shade50 : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: expandido
-            ? BorderSide(color: Colors.blue.shade200, width: 1.5)
-            : BorderSide.none,
+        side: selecionado
+            ? BorderSide(color: Colors.amber.shade600, width: 1.5)
+            : expandido
+                ? BorderSide(color: Colors.blue.shade200, width: 1.5)
+                : BorderSide.none,
       ),
       child: Column(
         children: [
@@ -318,6 +443,23 @@ IconButton(
                   // Linha 1: urgência + status + timer
                   Row(
                     children: [
+                      if (podeAssumir)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _alternarSelecao(sol.id),
+                            child: Icon(
+                              selecionado
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              size: 20,
+                              color: selecionado
+                                  ? Colors.amber.shade800
+                                  : Colors.grey.shade400,
+                            ),
+                          ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
@@ -733,6 +875,73 @@ IconButton(
       }
     } finally {
       if (mounted) setState(() => _acaoLoading = false);
+    }
+  }
+
+  void _alternarSelecao(String id) {
+    setState(() {
+      if (_selecionados.contains(id)) {
+        _selecionados.remove(id);
+      } else {
+        _selecionados.add(id);
+      }
+    });
+  }
+
+  /// Aceita de uma vez todas as solicitações marcadas na fila de despacho
+  Future<void> _aceitarSelecionados() async {
+    final nome = _nomeEntregador ?? await AuthService().entregadorNome;
+    if (nome == null || nome.isEmpty || _selecionados.isEmpty) return;
+    setState(() => _aceitandoLote = true);
+    try {
+      final ids = _selecionados.toList();
+      final resultados = await Future.wait(
+        ids.map((id) => SolicitacaoService.assumir(id, nome)),
+      );
+      final falhas =
+          resultados.where((r) => r != AcaoResultado.sucesso).length;
+      if (!mounted) return;
+      if (falhas > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(falhas == resultados.length
+                ? 'Não foi possível aceitar os itens selecionados'
+                : '$falhas item(ns) já tinham sido assumidos por outro entregador'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Itens aceitos!'), backgroundColor: Colors.green),
+        );
+      }
+      setState(() => _selecionados.clear());
+      await _carregarDados(silent: true);
+    } finally {
+      if (mounted) setState(() => _aceitandoLote = false);
+    }
+  }
+
+  /// Confirma de uma vez todas as minhas solicitações em rota (ou em baixa)
+  Future<void> _concluirLista(List<Solicitacao> minhas) async {
+    final alvo = minhas
+        .where((s) => s.status == 'EM_ROTA' || s.status == 'EM_BAIXA')
+        .toList();
+    if (alvo.isEmpty) return;
+    setState(() => _concluindoLista = true);
+    try {
+      await Future.wait(
+        alvo.map((s) => SolicitacaoService.confirmar(s.id)),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Lista concluída!'), backgroundColor: Colors.green),
+      );
+      await _carregarDados(silent: true);
+    } finally {
+      if (mounted) setState(() => _concluindoLista = false);
     }
   }
 

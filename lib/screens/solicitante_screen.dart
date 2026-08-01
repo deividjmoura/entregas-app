@@ -643,6 +643,17 @@ Row(
                   ],
                 ),
               ],
+              if (s.isEmAndamento) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _abrirChat(s),
+                    icon: const Icon(Icons.chat_outlined, size: 18),
+                    label: const Text('Chat'),
+                  ),
+                ),
+              ],
               if (s.isPendente) ...[
                 const SizedBox(height: 8),
                 Align(
