@@ -42,14 +42,23 @@ class _FilaScreenState extends State<FilaScreen> {
 
     try {
       final nome = await AuthService().getEntregadorNome();
-      final lista = await SolicitacaoService.listar();
+      final todas = await SolicitacaoService.listar();
 
-      // Ordena por urgência (maior peso primeiro) e depois por data de criação
+      // Só itens ativos na fila (igual ao web: PENDENTE + em andamento)
+      final lista = todas.where((s) {
+        final st = s.status.toUpperCase();
+        return st == 'PENDENTE' ||
+            st == 'EM_CURSO' ||
+            st == 'EM_ROTA' ||
+            st == 'EM_BAIXA';
+      }).toList();
+
+      // 1º prioridade (urgência), 2º tempo de espera (mais antiga primeiro)
       lista.sort((a, b) {
         final pesoA = AppConstantes.pesoUrgencia(a.urgencia);
         final pesoB = AppConstantes.pesoUrgencia(b.urgencia);
-        if (pesoA != pesoB) return pesoB.compareTo(pesoA);
-        return a.criadaEm.compareTo(b.criadaEm);
+        if (pesoA != pesoB) return pesoB.compareTo(pesoA); // maior urgência primeiro
+        return a.criadaEm.compareTo(b.criadaEm); // mais antiga primeiro
       });
 
       if (mounted) {
@@ -88,6 +97,15 @@ class _FilaScreenState extends State<FilaScreen> {
       final local = s.localDestino;
       grupos.putIfAbsent(local, () => []).add(s);
     }
+    // Mantém a ordem de prioridade/tempo dentro de cada grupo
+    for (final entry in grupos.entries) {
+      entry.value.sort((a, b) {
+        final pesoA = AppConstantes.pesoUrgencia(a.urgencia);
+        final pesoB = AppConstantes.pesoUrgencia(b.urgencia);
+        if (pesoA != pesoB) return pesoB.compareTo(pesoA);
+        return a.criadaEm.compareTo(b.criadaEm);
+      });
+    }
     return grupos;
   }
 
@@ -95,6 +113,17 @@ class _FilaScreenState extends State<FilaScreen> {
   Widget build(BuildContext context) {
     final grupos = _agruparPorLocal(_solicitacoes);
     final locais = grupos.keys.toList();
+    // Locais com maior urgência / item mais antigo primeiro
+    locais.sort((la, lb) {
+      final ga = grupos[la]!;
+      final gb = grupos[lb]!;
+      final pesoA = ga.map((s) => AppConstantes.pesoUrgencia(s.urgencia)).fold<int>(0, (a, b) => a > b ? a : b);
+      final pesoB = gb.map((s) => AppConstantes.pesoUrgencia(s.urgencia)).fold<int>(0, (a, b) => a > b ? a : b);
+      if (pesoA != pesoB) return pesoB.compareTo(pesoA);
+      final tempoA = ga.map((s) => s.criadaEm).reduce((a, b) => a.isBefore(b) ? a : b);
+      final tempoB = gb.map((s) => s.criadaEm).reduce((a, b) => a.isBefore(b) ? a : b);
+      return tempoA.compareTo(tempoB);
+    });
 
     return Scaffold(
       appBar: AppBar(

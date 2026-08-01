@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
 import '../services/solicitacao_service.dart';
@@ -327,6 +328,16 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
                 isDense: true,
               ),
               textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              onChanged: (v) {
+                final up = v.toUpperCase();
+                if (v != up) {
+                  _descricaoCtrl.value = TextEditingValue(
+                    text: up,
+                    selection: TextSelection.collapsed(offset: up.length),
+                  );
+                }
+              },
             ),
             const SizedBox(height: 10),
             TextField(
@@ -338,6 +349,16 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
                 hintText: 'Ex: REAR DOOR, LINHA 3',
               ),
               textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              onChanged: (v) {
+                final up = v.toUpperCase();
+                if (v != up) {
+                  _destinoCtrl.value = TextEditingValue(
+                    text: up,
+                    selection: TextSelection.collapsed(offset: up.length),
+                  );
+                }
+              },
             ),
             const SizedBox(height: 10),
             TextField(
@@ -348,6 +369,16 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
                 isDense: true,
               ),
               textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              onChanged: (v) {
+                final up = v.toUpperCase();
+                if (v != up) {
+                  _rackCtrl.value = TextEditingValue(
+                    text: up,
+                    selection: TextSelection.collapsed(offset: up.length),
+                  );
+                }
+              },
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -489,6 +520,20 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Força todo o texto digitado para MAIÚSCULO
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
     );
   }
 }
