@@ -104,6 +104,15 @@ class _FilaScreenState extends State<FilaScreen> {
               : 'Fila de Entregas',
         ),
         actions: [
+                    IconButton(
+            icon: const Icon(Icons.assignment_ind_outlined),
+            tooltip: 'Modo solicitante',
+            onPressed: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const SolicitanteScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => _carregarDados(),
