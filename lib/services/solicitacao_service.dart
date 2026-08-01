@@ -1,51 +1,83 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import '../models/solicitacao.dart';
+import '../models/mensagem.dart';
 import 'api_client.dart';
-
-enum AcaoResultado { sucesso, jaAssumido, conflitoStatus, erro }
+import 'auth_service.dart';
 
 class SolicitacaoService {
   static Future<List<Solicitacao>> listar() async {
-    final res = await ApiClient.get('/api/solicitacoes');
-    if (res.statusCode == 200) {
-      final List data = jsonDecode(res.body);
-      return data.map((json) => Solicitacao.fromJson(json)).toList();
+    try {
+      final response = await ApiClient.get('/api/solicitacoes');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => Solicitacao.fromJson(json)).toList();
+      }
+    } catch (e) {
+      debugPrint('Erro ao listar solicitações: $e');
     }
     return [];
   }
 
-  static Future<AcaoResultado> assumir(String id, String entregadorNome) async {
-    final res = await ApiClient.post('/api/solicitacoes/$id/assumir', {
-      'entregadorNome': entregadorNome,
+  static Future<bool> assumir(String id) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.post('/api/solicitacoes/$id/assumir', {
+      'entregadorNome': nome,
     });
-
-    if (res.statusCode == 200) return AcaoResultado.sucesso;
-    if (res.statusCode == 409) return AcaoResultado.jaAssumido;
-    return AcaoResultado.erro;
+    return response.statusCode == 200;
   }
 
-  static Future<bool> atualizarStatusEmRotaOuBaixa(String id, String novoStatus) async {
-    if (novoStatus != 'EM_ROTA' && novoStatus != 'EM_BAIXA') {
+  static Future<bool> confirmar(String id) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.post('/api/solicitacoes/$id/confirmar', {
+      'entregadorNome': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> atualizarStatus(String id, String novoStatus) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.patch('/api/solicitacoes/$id', {
+      'status': novoStatus,
+      'alteradoPor': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> atualizarEnderecoEstoque(String id, String novoEndereco) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.patch('/api/solicitacoes/$id/endereco', {
+      'enderecoEstoque': novoEndereco,
+      'alteradoPor': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<List<Mensagem>> listarMensagens(String solicitacaoId) async {
+    try {
+      final response = await ApiClient.get('/api/solicitacoes/$solicitacaoId/mensagens');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => Mensagem.fromJson(json)).toList();
+      }
+    } catch (e) {
+      debugPrint('Erro ao listar mensagens: $e');
+    }
+    return [];
+  }
+
+  static Future<bool> enviarMensagem(String solicitacaoId, String texto) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    try {
+      final response = await ApiClient.post('/api/solicitacoes/$solicitacaoId/mensagens', {
+        'texto': texto,
+        'autorNome': nome,
+        'autorTipo': 'ENTREGADOR',
+      });
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Erro ao enviar mensagem: $e');
       return false;
     }
-    final res = await ApiClient.patch('/api/solicitacoes/$id', {'status': novoStatus});
-    return res.statusCode == 200;
-  }
-
-  static Future<AcaoResultado> confirmar(String id) async {
-    final res = await ApiClient.post('/api/solicitacoes/$id/confirmar', {});
-    if (res.statusCode == 200) return AcaoResultado.sucesso;
-    if (res.statusCode == 409) return AcaoResultado.conflitoStatus;
-    return AcaoResultado.erro;
-  }
-
-  static Future<bool> cancelar(String id) async {
-    final res = await ApiClient.delete('/api/solicitacoes/$id');
-    return res.statusCode == 200;
-  }
-
-  static Future<bool> toggleFavorito(String id, bool favorito) async {
-    final res = await ApiClient.patch('/api/solicitacoes/$id', {'favorito': favorito});
-    return res.statusCode == 200;
   }
 }

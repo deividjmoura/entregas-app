@@ -1,9 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [1/1] Atualizando SolicitacaoDetalheScreen para suporte à exibição de Foto ==="
+
+cat > lib/screens/solicitacao_detalhe_screen.dart <<'EOF'
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
 import '../services/solicitacao_service.dart';
 import '../services/auth_service.dart';
 import '../utils/constantes.dart';
-import 'chat_screen.dart';
 
 class SolicitacaoDetalheScreen extends StatefulWidget {
   final Solicitacao solicitacao;
@@ -179,20 +184,6 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Detalhes #${_item.id.substring(0, _item.id.length > 6 ? 6 : _item.id.length)}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            tooltip: 'Abrir Chat',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChatScreen(solicitacao: _item),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -201,6 +192,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Cabeçalho de Status e Urgência
                   Row(
                     children: [
                       Chip(
@@ -229,6 +221,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                   Text(_item.descricao.isEmpty ? 'Sem descrição' : _item.descricao),
                   const SizedBox(height: 16),
 
+                  // Card de Endereço de Estoque (3.1)
                   Card(
                     color: Colors.grey.shade50,
                     child: Padding(
@@ -265,6 +258,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                     ),
                   ),
 
+                  // Card de Exibição de Foto (3.2)
                   if (_item.fotoUrl != null && _item.fotoUrl!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Card(
@@ -307,6 +301,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
 
                   const SizedBox(height: 24),
 
+                  // Ações Contextuais baseadas no Status
                   if (_item.status == 'PENDENTE')
                     SizedBox(
                       width: double.infinity,
@@ -377,3 +372,6 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
     );
   }
 }
+EOF
+
+echo "✨ Script 05-foto.sh concluído com sucesso!"

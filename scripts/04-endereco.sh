@@ -1,9 +1,73 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [1/2] Atualizando SolicitacaoService com o método de atualização de endereço ==="
+
+cat > lib/services/solicitacao_service.dart <<'EOF'
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import '../models/solicitacao.dart';
+import 'api_client.dart';
+import 'auth_service.dart';
+
+class SolicitacaoService {
+  static Future<List<Solicitacao>> listar() async {
+    try {
+      final response = await ApiClient.get('/api/solicitacoes');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => Solicitacao.fromJson(json)).toList();
+      }
+    } catch (e) {
+      debugPrint('Erro ao listar solicitações: $e');
+    }
+    return [];
+  }
+
+  static Future<bool> assumir(String id) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.post('/api/solicitacoes/$id/assumir', {
+      'entregadorNome': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> confirmar(String id) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.post('/api/solicitacoes/$id/confirmar', {
+      'entregadorNome': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> atualizarStatus(String id, String novoStatus) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.patch('/api/solicitacoes/$id', {
+      'status': novoStatus,
+      'alteradoPor': nome,
+    });
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> atualizarEnderecoEstoque(String id, String novoEndereco) async {
+    final nome = AuthService().currentUser.value?.displayName ?? 'Entregador';
+    final response = await ApiClient.patch('/api/solicitacoes/$id/endereco', {
+      'enderecoEstoque': novoEndereco,
+      'alteradoPor': nome,
+    });
+    return response.statusCode == 200;
+  }
+}
+EOF
+
+echo "=== [2/2] Atualizando SolicitacaoDetalheScreen com visualização e edição de Endereço ==="
+
+cat > lib/screens/solicitacao_detalhe_screen.dart <<'EOF'
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
 import '../services/solicitacao_service.dart';
 import '../services/auth_service.dart';
 import '../utils/constantes.dart';
-import 'chat_screen.dart';
 
 class SolicitacaoDetalheScreen extends StatefulWidget {
   final Solicitacao solicitacao;
@@ -135,36 +199,6 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
     }
   }
 
-  void _abrirModalFoto(String url) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: const Text('Foto do Item'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            InteractiveViewer(
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Text('Erro ao carregar a imagem.'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final usuarioAtual = AuthService().currentUser.value?.displayName;
@@ -179,20 +213,6 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Detalhes #${_item.id.substring(0, _item.id.length > 6 ? 6 : _item.id.length)}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            tooltip: 'Abrir Chat',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChatScreen(solicitacao: _item),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -201,6 +221,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Cabeçalho de Status e Urgência
                   Row(
                     children: [
                       Chip(
@@ -229,6 +250,7 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                   Text(_item.descricao.isEmpty ? 'Sem descrição' : _item.descricao),
                   const SizedBox(height: 16),
 
+                  // Card de Endereço de Estoque (3.1)
                   Card(
                     color: Colors.grey.shade50,
                     child: Padding(
@@ -265,48 +287,9 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
                     ),
                   ),
 
-                  if (_item.fotoUrl != null && _item.fotoUrl!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Card(
-                      color: Colors.grey.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.image, color: Colors.blueGrey),
-                                SizedBox(width: 8),
-                                Text('Foto do Item', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            GestureDetector(
-                              onTap: () => _abrirModalFoto(_item.fotoUrl!),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  _item.fotoUrl!,
-                                  height: 180,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    height: 100,
-                                    color: Colors.grey.shade200,
-                                    child: const Center(child: Text('Erro ao carregar a imagem.')),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-
                   const SizedBox(height: 24),
 
+                  // Ações Contextuais baseadas no Status
                   if (_item.status == 'PENDENTE')
                     SizedBox(
                       width: double.infinity,
@@ -377,3 +360,6 @@ class _SolicitacaoDetalheScreenState extends State<SolicitacaoDetalheScreen> {
     );
   }
 }
+EOF
+
+echo "✨ Script 04-endereco.sh finalizado com sucesso!"
