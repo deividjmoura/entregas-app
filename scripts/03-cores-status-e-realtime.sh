@@ -1,3 +1,137 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [1/3] Atualizando constantes (Cores e Labels) ==="
+
+cat > lib/utils/constantes.dart <<'EOF'
+import 'package:flutter/material.dart';
+
+class AppConstantes {
+  // Mapeamento idêntico ao URGENCIA_COR do web (domain.ts)
+  static Color corUrgencia(String urgencia) {
+    switch (urgencia.toUpperCase()) {
+      case 'LINHA_PARADA':
+        return const Color(0xFFF43F5E); // Rose 500
+      case 'CRITICA':
+        return const Color(0xFFF59E0B); // Amber 500
+      case 'MEDIA':
+        return const Color(0xFF0EA5E9); // Sky 500
+      case 'BAIXA':
+      default:
+        return const Color(0xFF71717A); // Zinc 500
+    }
+  }
+
+  // Mapeamento idêntico ao STATUS_LABELS do web
+  static const Map<String, String> statusLabels = {
+    'PENDENTE': 'Pendente',
+    'EM_CURSO': 'Aceito',
+    'EM_ROTA': 'Em rota',
+    'EM_BAIXA': 'Em baixa',
+    'ENTREGUE': 'Entregue',
+    'CANCELADA': 'Cancelada',
+  };
+
+  // Mapeamento idêntico ao TIPO_LABELS do web
+  static const Map<String, String> tipoLabels = {
+    'COMPONENTE_FISICO': 'Componente',
+    'CIRCUITO_ELETRONICO': 'Circuito',
+    'OUTROS': 'Outros',
+  };
+
+  static String formatarStatus(String status) =>
+      statusLabels[status] ?? status;
+
+  static String formatarTipo(String tipo) =>
+      tipoLabels[tipo] ?? tipo;
+}
+EOF
+
+echo "=== [2/3] Atualizando Main.dart para persistência de sessão ==="
+
+cat > lib/main.dart <<'EOF'
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'services/api_client.dart';
+import 'screens/login_screen.dart';
+import 'screens/fila_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  AuthService().init();
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Entregas App',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _checking = true;
+  bool _authenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _verificarSessao();
+  }
+
+  Future<void> _verificarSessao() async {
+    final token = await ApiClient.getToken();
+    final user = AuthService().currentUser.value;
+
+    setState(() {
+      _authenticated = (token != null && token.isNotEmpty && user != null);
+      _checking = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checking) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_authenticated) {
+      return const FilaScreen();
+    }
+
+    return const LoginScreen();
+  }
+}
+EOF
+
+echo "=== [3/3] Atualizando FilaScreen com Polling de 5s e Visual Atualizado ==="
+
+cat > lib/screens/fila_screen.dart <<'EOF'
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/solicitacao.dart';
@@ -114,3 +248,6 @@ class _FilaScreenState extends State<FilaScreen> {
     );
   }
 }
+EOF
+
+echo "✨ Parte 2 concluída com sucesso!"

@@ -1,3 +1,97 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [1/2] Verificando pré-requisitos do Firebase ==="
+
+if [ ! -f "lib/firebase_options.dart" ]; then
+  echo "❌ ERRO: lib/firebase_options.dart não encontrado!"
+  echo "Por favor, execute 'flutterfire configure' na raiz do projeto antes de rodar este script."
+  exit 1
+fi
+
+echo "✅ firebase_options.dart encontrado."
+
+echo "=== [2/2] Atualizando arquivos de Auth e Login ==="
+
+# 1. AuthService
+cat > lib/services/auth_service.dart <<'EOF'
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'api_client.dart';
+
+class AuthService {
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  ValueNotifier<User?> currentUser = ValueNotifier<User?>(null);
+
+  void init() {
+    currentUser.value = _auth.currentUser;
+    _auth.userChanges().listen((user) {
+      currentUser.value = user;
+    });
+  }
+
+  String get entregadorNome {
+    final user = _auth.currentUser;
+    if (user == null) return '';
+    return user.displayName ?? user.email ?? 'Entregador';
+  }
+
+  Future<UserCredential?> signInWithGoogle() async {
+    GoogleAuthProvider googleProvider = GoogleAuthProvider();
+    googleProvider.addScope('email');
+    googleProvider.addScope('profile');
+    return await _auth.signInWithPopup(googleProvider);
+  }
+
+  Future<void> logout() async {
+    await _auth.signOut();
+    await ApiClient.logout();
+  }
+}
+EOF
+
+# 2. Main.dart
+cat > lib/main.dart <<'EOF'
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'screens/login_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  AuthService().init();
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Entregas App',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const LoginScreen(),
+    );
+  }
+}
+EOF
+
+# 3. LoginScreen
+cat > lib/screens/login_screen.dart <<'EOF'
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -129,3 +223,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+EOF
+
+echo "✨ Tarefa 1.1 concluída com sucesso!"

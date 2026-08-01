@@ -1,35 +1,41 @@
 import 'package:flutter/material.dart';
 
-/// Status possíveis de uma solicitação, na ordem em que aparecem no fluxo.
-/// TODO: conferir com o backend se existem outros status além destes
-/// (ex: ENTREGUE, CANCELADA) e completar a lista.
-const statusDisponiveis = ['PENDENTE', 'EM_ROTA', 'EM_CURSO', 'EM_BAIXA'];
-
-/// Valores válidos de urgência — espelha URGENCIAS_VALIDAS em
-/// app/api/solicitacoes/[id]/route.ts no backend (entregas-teste).
-const urgenciasValidas = ['BAIXA', 'MEDIA', 'CRITICA', 'LINHA_PARADA'];
-
-/// Labels de exibição em português.
-/// TODO: conferir se batem com URGENCIA_LABELS em lib/domain.ts no backend
-/// (não conferido ainda — ajustar aqui se o texto do web for diferente).
-const urgenciaLabels = {
-  'BAIXA': 'Baixa',
-  'MEDIA': 'Média',
-  'CRITICA': 'Crítica',
-  'LINHA_PARADA': 'Linha Parada',
-};
-
-/// Cor associada a cada nível de urgência.
-/// TODO: conferir se bate com URGENCIA_COR em lib/domain.ts no backend
-/// (mantido igual ao que já existia em fila_screen.dart).
-Color corUrgencia(String urgencia) {
-  switch (urgencia) {
-    case 'CRITICA':
-    case 'LINHA_PARADA':
-      return Colors.red;
-    case 'MEDIA':
-      return Colors.orange;
-    default:
-      return Colors.green;
+class AppConstantes {
+  // Mapeamento idêntico ao URGENCIA_COR do web (domain.ts)
+  static Color corUrgencia(String urgencia) {
+    switch (urgencia.toUpperCase()) {
+      case 'LINHA_PARADA':
+        return const Color(0xFFF43F5E); // Rose 500
+      case 'CRITICA':
+        return const Color(0xFFF59E0B); // Amber 500
+      case 'MEDIA':
+        return const Color(0xFF0EA5E9); // Sky 500
+      case 'BAIXA':
+      default:
+        return const Color(0xFF71717A); // Zinc 500
+    }
   }
+
+  // Mapeamento idêntico ao STATUS_LABELS do web
+  static const Map<String, String> statusLabels = {
+    'PENDENTE': 'Pendente',
+    'EM_CURSO': 'Aceito',
+    'EM_ROTA': 'Em rota',
+    'EM_BAIXA': 'Em baixa',
+    'ENTREGUE': 'Entregue',
+    'CANCELADA': 'Cancelada',
+  };
+
+  // Mapeamento idêntico ao TIPO_LABELS do web
+  static const Map<String, String> tipoLabels = {
+    'COMPONENTE_FISICO': 'Componente',
+    'CIRCUITO_ELETRONICO': 'Circuito',
+    'OUTROS': 'Outros',
+  };
+
+  static String formatarStatus(String status) =>
+      statusLabels[status] ?? status;
+
+  static String formatarTipo(String tipo) =>
+      tipoLabels[tipo] ?? tipo;
 }

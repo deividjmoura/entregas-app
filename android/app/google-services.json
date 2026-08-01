@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "354506687825",
+    "project_id": "entregas-internas",
+    "storage_bucket": "entregas-internas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:354506687825:android:5e9f8e938d029c2b15ff70",
+        "android_client_info": {
+          "package_name": "com.suaempresa.entregas_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "354506687825-8qjkjkruevc8gh1vf4setuoeuvusuqsk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRekOYgROSuqlTPdjPUt-zENGYMRr6brk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "354506687825-8qjkjkruevc8gh1vf4setuoeuvusuqsk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

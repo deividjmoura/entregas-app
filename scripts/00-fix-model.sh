@@ -1,3 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== Atualizando o modelo Solicitacao (lib/models/solicitacao.dart) ==="
+
+cat > lib/models/solicitacao.dart <<'EOF'
 class Solicitacao {
   final String id;
   final String solicitanteNome;
@@ -65,3 +71,6 @@ class Solicitacao {
     };
   }
 }
+EOF
+
+echo "✨ Modelo Solicitacao atualizado com sucesso!"
