@@ -1,8 +1,6 @@
 import 'chat_screen.dart';
 import '../services/presenca_service.dart';
 import '../widgets/elapsed_time.dart';
-import 'package:provider/provider.dart';
-import '../providers/tema_provider.dart';
 import 'solicitante_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -12,7 +10,8 @@ import '../services/auth_service.dart';
 import '../utils/constantes.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
-import 'solicitacao_detalhe_screen.dart'; // ajuste o nome se o seu arquivo for diferente
+import '../widgets/foto_item.dart';
+import '../widgets/app_drawer.dart';
 
 class FilaScreen extends StatefulWidget {
   const FilaScreen({super.key});
@@ -27,6 +26,7 @@ class _FilaScreenState extends State<FilaScreen> {
   String? _nomeEntregador;
   Timer? _pollingTimer;
   String? _expandedId; // card expandido na fila
+  final Set<String> _gruposColapsados = {}; // chaves dos grupos comprimidos
   bool _acaoLoading = false;
   final Set<String> _selecionados = {};
   bool _aceitandoLote = false;
@@ -127,6 +127,48 @@ class _FilaScreenState extends State<FilaScreen> {
     }
   }
 
+  bool _colapsado(String chave) => _gruposColapsados.contains(chave);
+
+  void _alternarColapso(String chave) {
+    setState(() {
+      if (_gruposColapsados.contains(chave)) {
+        _gruposColapsados.remove(chave);
+      } else {
+        _gruposColapsados.add(chave);
+      }
+    });
+  }
+
+  /// Cabeçalho de grupo clicável, com seta indicando expandido/comprimido.
+  /// [trailing] fica visível só quando o grupo está expandido, pra não
+  /// poluir a lista quando comprimida.
+  Widget _buildGroupHeader({
+    required String chave,
+    required Widget titulo,
+    Widget? trailing,
+  }) {
+    final colapsado = _colapsado(chave);
+    return InkWell(
+      onTap: () => _alternarColapso(chave),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Row(
+          children: [
+            Expanded(child: titulo),
+            if (trailing != null && !colapsado) ...[
+              trailing,
+              const SizedBox(width: 6),
+            ],
+            Icon(
+              colapsado ? Icons.expand_more : Icons.expand_less,
+              color: Colors.grey.shade500,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Agrupa as solicitações por local de destino
   Map<String, List<Solicitacao>> _agruparPorLocal(List<Solicitacao> lista) {
     final Map<String, List<Solicitacao>> grupos = {};
@@ -183,9 +225,9 @@ class _FilaScreenState extends State<FilaScreen> {
     // ===== Minha lista (carrinho) — sempre no topo =====
     if (minhas.isNotEmpty) {
       corpo.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(
+        _buildGroupHeader(
+          chave: 'minha_lista',
+          titulo: Row(
             children: [
               const Icon(Icons.shopping_cart, size: 18),
               const SizedBox(width: 6),
@@ -193,10 +235,12 @@ class _FilaScreenState extends State<FilaScreen> {
                 'Minha lista (${minhas.length})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
-              const Spacer(),
-              if (totalEmRota > 0)
-                ElevatedButton.icon(
-                  onPressed: _concluindoLista ? null : () => _concluirLista(minhas),
+            ],
+          ),
+          trailing: totalEmRota > 0
+              ? ElevatedButton.icon(
+                  onPressed:
+                      _concluindoLista ? null : () => _concluirLista(minhas),
                   icon: _concluindoLista
                       ? const SizedBox(
                           width: 14,
@@ -212,19 +256,20 @@ class _FilaScreenState extends State<FilaScreen> {
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                   ),
-                ),
-            ],
-          ),
+                )
+              : null,
         ),
       );
-      corpo.addAll(minhas.map((sol) => _buildCard(sol)));
+      if (!_colapsado('minha_lista')) {
+        corpo.addAll(minhas.map((sol) => _buildCard(sol)));
+      }
     }
 
     // ===== Fila de despacho — ainda não aceitas, logo abaixo da minha lista =====
     corpo.add(
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Row(
+      _buildGroupHeader(
+        chave: 'fila_despacho',
+        titulo: Row(
           children: [
             const Icon(Icons.inbox, size: 18),
             const SizedBox(width: 6),
@@ -237,48 +282,54 @@ class _FilaScreenState extends State<FilaScreen> {
       ),
     );
 
-    if (pendentes.isEmpty) {
-      corpo.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            'Nenhuma solicitação pendente no momento',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-        ),
-      );
-    } else {
-      for (final local in locais) {
-        final items = grupos[local]!;
+    if (!_colapsado('fila_despacho')) {
+      if (pendentes.isEmpty) {
         corpo.add(
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: _corParaLocal(local),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  local,
-                  style:
-                      const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '(${items.length})',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'Nenhuma solicitação pendente no momento',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
             ),
           ),
         );
-        corpo.addAll(items.map((sol) => _buildCard(sol)));
+      } else {
+        for (final local in locais) {
+          final items = grupos[local]!;
+          final chaveLocal = 'local_$local';
+          corpo.add(
+            _buildGroupHeader(
+              chave: chaveLocal,
+              titulo: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: _corParaLocal(local),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    local,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '(${items.length})',
+                    style:
+                        TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          );
+          if (!_colapsado(chaveLocal)) {
+            corpo.addAll(items.map((sol) => _buildCard(sol)));
+          }
+        }
       }
     }
 
@@ -290,39 +341,27 @@ class _FilaScreenState extends State<FilaScreen> {
               : 'Fila · $_online online',
         ),
         actions: [
-                    IconButton(
-            icon: const Icon(Icons.assignment_ind_outlined),
-            tooltip: 'Modo solicitante',
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const SolicitanteScreen()),
-              );
-            },
-          ),
-                    IconButton(
-            icon: const Icon(Icons.dashboard_outlined),
-            tooltip: 'Painel geral',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DashboardScreen()),
-              );
-            },
-          ),
           IconButton(
-            icon: Icon(context.watch<TemaProvider>().icone),
-            tooltip: 'Alternar tema',
-            onPressed: () => context.read<TemaProvider>().ciclar(),
-          ),
-IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Atualizar',
             onPressed: () => _carregarDados(),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Sair',
-          ),
         ],
+      ),
+      drawer: AppDrawer(
+        nomeEntregador: _nomeEntregador,
+        online: _online,
+        onPainelGeral: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+        },
+        onModoSolicitante: () {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const SolicitanteScreen()),
+          );
+        },
+        onSair: _logout,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -631,6 +670,18 @@ IconButton(
                         style: TextStyle(
                             fontSize: 13, color: Colors.grey.shade800),
                       ),
+                      if (sol.temFoto) ...[
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.photo_outlined,
+                              size: 20, color: Colors.blue.shade600),
+                          tooltip: 'Ver foto',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _verFoto(sol),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -705,12 +756,6 @@ IconButton(
                         ),
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    TextButton.icon(
-                      onPressed: () => _abrirDetalhe(sol),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Detalhe / estoque'),
-                    ),
                   ] else if (deOutro)
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -829,12 +874,26 @@ IconButton(
     }
   }
 
-  void _abrirDetalhe(Solicitacao sol) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SolicitacaoDetalheScreen(
-          solicitacao: sol,
-          onUpdated: () => _carregarDados(silent: true),
+  void _verFoto(Solicitacao sol) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: FotoItem(solicitacaoId: sol.id, height: 400),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              style: IconButton.styleFrom(backgroundColor: Colors.black45),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
         ),
       ),
     );
