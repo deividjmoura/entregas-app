@@ -3,6 +3,7 @@ import '../widgets/solicitante_item_actions.dart';
 import 'chat_screen.dart';
 import '../widgets/foto_item.dart';
 import '../widgets/badge_nao_lidas.dart';
+import '../widgets/app_drawer.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,10 +12,8 @@ import '../services/auth_service.dart';
 import '../services/solicitacao_service.dart';
 import '../utils/constantes.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import '../utils/image_utils.dart';
 import '../services/preferencias_service.dart';
-import '../providers/tema_provider.dart';
 import 'dashboard_screen.dart';
 import 'fila_screen.dart';
 import 'login_screen.dart';
@@ -224,6 +223,39 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
     if (r == AcaoResultado.sucesso) await _carregar();
   }
 
+  Future<void> _favoritar(Solicitacao s, bool valor) async {
+    final r = await SolicitacaoService.favoritar(s.id, valor);
+    if (r == AcaoResultado.sucesso) {
+      await _carregar(silent: true);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Falha ao favoritar'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _refazer(Solicitacao s) async {
+    if (_nome == null) return;
+    final criada =
+        await SolicitacaoService.refazer(s, solicitanteNome: _nome!);
+    if (!mounted) return;
+    if (criada != null) {
+      await _carregar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Solicitação refeita!'),
+            backgroundColor: Colors.green),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Falha ao refazer solicitação'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _logout() async {
     await AuthService().signOut();
     if (mounted) {
@@ -252,37 +284,37 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
   Widget build(BuildContext context) {
     final ativas = _minhas.where((s) => !s.isFinalizada).toList();
     final historico = _minhas.where((s) => s.isFinalizada).toList();
+    final favoritos = _minhas.where((s) => s.favorito).toList()
+      ..sort((a, b) => b.criadaEm.compareTo(a.criadaEm));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_nome != null ? 'Solicitante · $_nome' : 'Solicitante'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.local_shipping_outlined),
-            tooltip: 'Ir para fila do entregador',
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const FilaScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.dashboard_outlined),
-            tooltip: 'Painel geral',
-            onPressed: () {
+      ),
+      drawer: AppDrawer(
+        papel: 'Solicitante',
+        nome: _nome,
+        items: [
+          AppDrawerItem(
+            icon: Icons.dashboard_outlined,
+            label: 'Painel geral',
+            onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const DashboardScreen()),
               );
             },
           ),
-          IconButton(
-            icon: Icon(context.watch<TemaProvider>().icone),
-            tooltip: 'Alternar tema',
-            onPressed: () => context.read<TemaProvider>().ciclar(),
+          AppDrawerItem(
+            icon: Icons.local_shipping_outlined,
+            label: 'Modo entregador',
+            onTap: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const FilaScreen()),
+              );
+            },
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: () => _carregar()),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
+        onSair: _logout,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => setState(() => _mostrarForm = !_mostrarForm),
@@ -319,6 +351,10 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
                               if (ativas.isNotEmpty) ...[
                                 _secaoTitulo('Em andamento (${ativas.length})'),
                                 ...ativas.map(_cardSolicitacao),
+                              ],
+                              if (favoritos.isNotEmpty) ...[
+                                _secaoTitulo('⭐ Favoritos (${favoritos.length})'),
+                                ...favoritos.map(_cardFavorito),
                               ],
                               if (historico.isNotEmpty) ...[
                                 _secaoTitulo('Histórico (${historico.length})'),
@@ -666,8 +702,86 @@ Row(
                   ),
                 ),
               ],
+              if (s.isFinalizada) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        s.favorito ? Icons.star : Icons.star_border,
+                        color: s.favorito
+                            ? Colors.amber.shade700
+                            : Colors.grey.shade500,
+                      ),
+                      tooltip:
+                          s.favorito ? 'Remover dos favoritos' : 'Favoritar',
+                      onPressed: () => _favoritar(s, !s.favorito),
+                    ),
+                    if (s.status == 'ENTREGUE')
+                      OutlinedButton.icon(
+                        onPressed: () => _refazer(s),
+                        icon: const Icon(Icons.replay, size: 16),
+                        label: const Text('Refazer'),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cardFavorito(Solicitacao s) {
+    final cor = AppConstantes.corUrgencia(s.urgencia);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: cor.withOpacity(0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    s.descricaoItem,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${s.localDestino}'
+                    '${s.rackOuSlide != null && s.rackOuSlide!.isNotEmpty ? ' (${s.rackOuSlide})' : ''}'
+                    ' · ${AppConstantes.formatarTipo(s.tipo)}'
+                    ' · ${AppConstantes.formatarUrgencia(s.urgencia)}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.star, color: Colors.amber.shade700),
+              tooltip: 'Remover dos favoritos',
+              onPressed: () => _favoritar(s, false),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _refazer(s),
+              icon: const Icon(Icons.replay, size: 16),
+              label: const Text('Refazer'),
+            ),
+          ],
         ),
       ),
     );

@@ -340,27 +340,31 @@ class _FilaScreenState extends State<FilaScreen> {
               ? 'Fila · $_nomeEntregador · $_online online'
               : 'Fila · $_online online',
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Atualizar',
-            onPressed: () => _carregarDados(),
-          ),
-        ],
       ),
       drawer: AppDrawer(
-        nomeEntregador: _nomeEntregador,
+        papel: 'Entregador',
+        nome: _nomeEntregador,
         online: _online,
-        onPainelGeral: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
-          );
-        },
-        onModoSolicitante: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SolicitanteScreen()),
-          );
-        },
+        items: [
+          AppDrawerItem(
+            icon: Icons.dashboard_outlined,
+            label: 'Painel geral',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+            },
+          ),
+          AppDrawerItem(
+            icon: Icons.assignment_ind_outlined,
+            label: 'Modo solicitante',
+            onTap: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const SolicitanteScreen()),
+              );
+            },
+          ),
+        ],
         onSair: _logout,
       ),
       body: _isLoading

@@ -143,6 +143,36 @@ class SolicitacaoService {
     }
   }
 
+  /// PATCH favorito — marca/desmarca a solicitação como favorita
+  static Future<AcaoResultado> favoritar(String id, bool valor) async {
+    try {
+      final response = await ApiClient.patch(
+        '/solicitacoes/$id',
+        body: {'favorito': valor},
+      );
+      if (response.statusCode == 200) return AcaoResultado.sucesso;
+      return AcaoResultado.erro;
+    } catch (_) {
+      return AcaoResultado.erro;
+    }
+  }
+
+  /// Reabre uma solicitação (concluída ou favoritada) como uma nova
+  /// PENDENTE, com os mesmos dados — espelha o "refazer" da versão web.
+  static Future<Solicitacao?> refazer(
+    Solicitacao s, {
+    required String solicitanteNome,
+  }) {
+    return criar(
+      tipo: s.tipo,
+      descricaoItem: s.descricaoItem,
+      localDestino: s.localDestino,
+      rackOuSlide: s.rackOuSlide,
+      urgencia: s.urgencia,
+      solicitanteNome: solicitanteNome,
+    );
+  }
+
   /// DELETE — cancela a solicitação
   static Future<AcaoResultado> cancelar(String id) async {
     try {

@@ -192,12 +192,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                     ),
-                    SizedBox(
-                      height: 40,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           for (final st in [
                             'TODOS',
@@ -208,27 +208,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             'ENTREGUE',
                             'CANCELADA',
                           ])
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 3),
-                              child: FilterChip(
-                                label: Text(
-                                  st == 'TODOS'
-                                      ? 'Todos'
-                                      : AppConstantes.formatarStatus(st),
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                selected: _filtroStatus == st,
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4),
-                                labelPadding: const EdgeInsets.symmetric(
-                                    horizontal: 4),
-                                onSelected: (_) =>
-                                    setState(() => _filtroStatus = st),
-                              ),
+                            _FiltroStatusPill(
+                              label: st == 'TODOS'
+                                  ? 'Todos'
+                                  : AppConstantes.formatarStatus(st),
+                              selecionado: _filtroStatus == st,
+                              onTap: () => setState(() => _filtroStatus = st),
                             ),
                         ],
                       ),
@@ -306,6 +291,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+/// Pill de filtro neutra — sem checkmark, sem sombra, sem "salto" de
+/// tamanho ao selecionar. A cor de seleção é neutra (não usa a cor do
+/// status), pra não competir com as cores de status que já aparecem nos
+/// cards da lista logo abaixo.
+class _FiltroStatusPill extends StatelessWidget {
+  final String label;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  const _FiltroStatusPill({
+    required this.label,
+    required this.selecionado,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selecionado ? Colors.black87 : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selecionado ? Colors.black87 : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: selecionado ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
     );
   }
 }

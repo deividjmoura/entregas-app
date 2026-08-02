@@ -2,32 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/tema_provider.dart';
 
+/// Um item de navegação do menu lateral.
+class AppDrawerItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const AppDrawerItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
 /// Menu lateral padrão do app — espelha o sidebar da versão web
 /// (components/app-shell.tsx), reunindo as ações que antes ficavam
-/// espalhadas como ícones na AppBar.
+/// espalhadas como ícones na AppBar. Genérico o bastante pra ser
+/// usado tanto na tela do entregador quanto na do solicitante.
 class AppDrawer extends StatelessWidget {
-  final String? nomeEntregador;
-  final int online;
-  final VoidCallback onPainelGeral;
-  final VoidCallback onModoSolicitante;
+  final String papel; // ex.: 'Entregador' ou 'Solicitante'
+  final String? nome;
+  final int? online; // null = não mostra o contador de online
+  final List<AppDrawerItem> items;
   final VoidCallback onSair;
 
   const AppDrawer({
     super.key,
-    required this.nomeEntregador,
-    required this.online,
-    required this.onPainelGeral,
-    required this.onModoSolicitante,
+    required this.papel,
+    required this.nome,
+    this.online,
+    required this.items,
     required this.onSair,
   });
 
   @override
   Widget build(BuildContext context) {
     final tema = context.watch<TemaProvider>();
-    final nome = (nomeEntregador != null && nomeEntregador!.isNotEmpty)
-        ? nomeEntregador!
-        : 'Entregador';
-    final iniciais = nome.substring(0, 1).toUpperCase();
+    final nomeExibido = (nome != null && nome!.isNotEmpty) ? nome! : papel;
+    final iniciais = nomeExibido.substring(0, 1).toUpperCase();
     final corPrimaria = Theme.of(context).colorScheme.primary;
 
     return Drawer(
@@ -59,7 +71,7 @@ class AppDrawer extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'ENTREGADOR',
+                          papel.toUpperCase(),
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.75),
                             fontSize: 11,
@@ -69,7 +81,7 @@ class AppDrawer extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          nome,
+                          nomeExibido,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -77,21 +89,23 @@ class AppDrawer extends StatelessWidget {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.circle,
-                                size: 8, color: Colors.greenAccent),
-                            const SizedBox(width: 5),
-                            Text(
-                              '$online online',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
-                                fontSize: 12,
+                        if (online != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.circle,
+                                  size: 8, color: Colors.greenAccent),
+                              const SizedBox(width: 5),
+                              Text(
+                                '$online online',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.85),
+                                  fontSize: 12,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -102,22 +116,15 @@ class AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.dashboard_outlined),
-                    title: const Text('Painel geral'),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onPainelGeral();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.assignment_ind_outlined),
-                    title: const Text('Modo solicitante'),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onModoSolicitante();
-                    },
-                  ),
+                  for (final item in items)
+                    ListTile(
+                      leading: Icon(item.icon),
+                      title: Text(item.label),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        item.onTap();
+                      },
+                    ),
                   ListTile(
                     leading: Icon(tema.icone),
                     title: const Text('Alternar tema'),
