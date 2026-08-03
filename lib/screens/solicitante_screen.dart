@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
 import '../services/solicitacao_service.dart';
+import '../services/notificacao_service.dart';
 import '../utils/constantes.dart';
 import 'package:image_picker/image_picker.dart';
 import '../utils/image_utils.dart';
@@ -42,7 +43,8 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
   String? _fotoBase64;
   String? _sugestaoEstoque;
   Map<String, int> _naoLidas = {};
-
+  Map<String, int> _naoLidasAnterior = {};
+  bool _primeiraCargaNaoLidas = true;
 
   @override
   void initState() {
@@ -88,6 +90,28 @@ class _SolicitanteScreenState extends State<SolicitanteScreen> {
         }
       } catch (_) {}
       if (mounted) {
+        if (!_primeiraCargaNaoLidas) {
+          for (final entry in naoLidas.entries) {
+            final prev = _naoLidasAnterior[entry.key] ?? 0;
+            if (entry.value > prev) {
+              // Busca descrição para título da notificação
+              final solMatch = lista.where((s) => s.id == entry.key);
+              final desc = solMatch.isNotEmpty
+                  ? solMatch.first.descricaoItem
+                  : null;
+              NotificacaoService.novaMensagem(
+                solicitacaoId: entry.key,
+                autorNome: 'Chat',
+                texto: 'Nova mensagem (${entry.value} não lida${entry.value > 1 ? 's' : ''})',
+                descricaoItem: desc,
+              );
+            }
+          }
+        } else {
+          _primeiraCargaNaoLidas = false;
+        }
+        _naoLidasAnterior = Map<String, int>.from(naoLidas);
+
         setState(() {
           _minhas = lista;
           _naoLidas = naoLidas;

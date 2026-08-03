@@ -4,6 +4,7 @@ import '../models/mensagem.dart';
 import '../models/solicitacao.dart';
 import '../services/auth_service.dart';
 import '../services/solicitacao_service.dart';
+import '../services/notificacao_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final Solicitacao solicitacao;
@@ -31,11 +32,16 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Evita notificar mensagens desta conversa enquanto ela está aberta
+    NotificacaoService.chatAbertoId = widget.solicitacao.id;
     _boot();
   }
 
   @override
   void dispose() {
+    if (NotificacaoService.chatAbertoId == widget.solicitacao.id) {
+      NotificacaoService.chatAbertoId = null;
+    }
     _poll?.cancel();
     _controller.dispose();
     _scroll.dispose();

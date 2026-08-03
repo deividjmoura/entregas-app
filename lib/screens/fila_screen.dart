@@ -1,5 +1,7 @@
 import 'chat_screen.dart';
 import '../services/presenca_service.dart';
+import '../services/pusher_service.dart';
+import '../services/notificacao_service.dart';
 import '../widgets/elapsed_time.dart';
 import 'solicitante_screen.dart';
 import 'dart:async';
@@ -33,6 +35,11 @@ class _FilaScreenState extends State<FilaScreen> {
   bool _concluindoLista = false;
   int _online = 0;
   Timer? _presencaTimer;
+  /// IDs de PENDENTE já vistos — evita notificar de novo no polling.
+  final Set<String> _pendentesConhecidos = {};
+  bool _primeiraCarga = true;
+  Map<String, int> _naoLidasAnterior = {};
+  bool _primeiraCargaNaoLidas = true;
 
   @override
   void initState() {
@@ -40,17 +47,34 @@ class _FilaScreenState extends State<FilaScreen> {
     _carregarDados();
     _tickPresenca();
     _presencaTimer = Timer.periodic(const Duration(seconds: 20), (_) => _tickPresenca());
-    // Atualiza a fila a cada 8 segundos (igual ao polling do web)
+    // Atualiza a fila a cada 5 segundos (igual ao polling do web)
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _carregarDados(silent: true);
     });
+    // Real-time: nova entrega via Pusher → notificação local com ação Aceitar
+    PusherService.conectar(onNovaEntrega: _onNovaEntregaPusher);
   }
 
   @override
   void dispose() {
     _pollingTimer?.cancel();
     _presencaTimer?.cancel();
+    PusherService.desconectar();
     super.dispose();
+  }
+
+  void _onNovaEntregaPusher(Solicitacao s) {
+    if (s.status.toUpperCase() != 'PENDENTE') return;
+    if (_pendentesConhecidos.contains(s.id)) return;
+    _pendentesConhecidos.add(s.id);
+    NotificacaoService.novaSolicitacao(
+      solicitacaoId: s.id,
+      descricao: s.descricaoItem,
+      local: s.localDestino,
+      urgencia: AppConstantes.formatarUrgencia(s.urgencia),
+    );
+    // Atualiza a lista em silêncio
+    _carregarDados(silent: true);
   }
 
   Future<void> _carregarDados({bool silent = false}) async {
@@ -97,6 +121,61 @@ class _FilaScreenState extends State<FilaScreen> {
       });
 
       if (mounted) {
+        final pendentesAgora = lista
+            .where((s) => s.status.toUpperCase() == 'PENDENTE')
+            .toList();
+        if (!_primeiraCarga) {
+          for (final s in pendentesAgora) {
+            if (!_pendentesConhecidos.contains(s.id)) {
+              _pendentesConhecidos.add(s.id);
+              NotificacaoService.novaSolicitacao(
+                solicitacaoId: s.id,
+                descricao: s.descricaoItem,
+                local: s.localDestino,
+                urgencia: AppConstantes.formatarUrgencia(s.urgencia),
+              );
+            }
+          }
+        } else {
+          for (final s in pendentesAgora) {
+            _pendentesConhecidos.add(s.id);
+          }
+          _primeiraCarga = false;
+        }
+        // Limpa IDs que saíram da fila pendente
+        _pendentesConhecidos.removeWhere(
+          (id) => !pendentesAgora.any((s) => s.id == id),
+        );
+
+        // Notifica mensagens novas nas entregas em andamento deste entregador
+        if (nome != null && nome.isNotEmpty) {
+          try {
+            final naoLidas =
+                await SolicitacaoService.minhasMensagensNaoLidas(nome);
+            if (!_primeiraCargaNaoLidas) {
+              for (final entry in naoLidas.entries) {
+                final prev = _naoLidasAnterior[entry.key] ?? 0;
+                if (entry.value > prev) {
+                  final solMatch = lista.where((s) => s.id == entry.key);
+                  final desc = solMatch.isNotEmpty
+                      ? solMatch.first.descricaoItem
+                      : null;
+                  NotificacaoService.novaMensagem(
+                    solicitacaoId: entry.key,
+                    autorNome: 'Chat',
+                    texto:
+                        'Nova mensagem (${entry.value} não lida${entry.value > 1 ? 's' : ''})',
+                    descricaoItem: desc,
+                  );
+                }
+              }
+            } else {
+              _primeiraCargaNaoLidas = false;
+            }
+            _naoLidasAnterior = Map<String, int>.from(naoLidas);
+          } catch (_) {}
+        }
+
         setState(() {
           _nomeEntregador = nome;
           _solicitacoes = lista;
