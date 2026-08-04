@@ -62,17 +62,24 @@ class NotificacaoService {
       final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
-      await androidPlugin?.requestNotificationsPermission();
+      // Android 13+: permissão em runtime. Se o usuário negar, ainda
+      // criamos os canais — assim, quando ele liberar depois nas
+      // configurações do sistema, as notificações passam a funcionar.
+      final granted = await androidPlugin?.requestNotificationsPermission();
+      debugPrint('NotificacaoService: POST_NOTIFICATIONS granted=$granted');
 
       // Canais novos (v2) com sons customizados.
       // Se o canal antigo já existia no device, o som não muda — por isso IDs novos.
+      // IMPORTANTE: notificações são LOCAIS (app precisa estar vivo / FilaScreen
+      // aberta + Pusher ou polling). Push remoto (FCM) ainda não está no backend.
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           canalNovaId,
           canalNovaNome,
           description: 'Avisos de novas solicitações na fila',
-          importance: Importance.high,
+          importance: Importance.max,
           playSound: true,
+          enableVibration: true,
           sound: RawResourceAndroidNotificationSound('notif_solicitacao'),
         ),
       );
@@ -83,6 +90,7 @@ class NotificacaoService {
           description: 'Mensagens recebidas no chat da entrega',
           importance: Importance.high,
           playSound: true,
+          enableVibration: true,
           sound: RawResourceAndroidNotificationSound('notif_mensagem'),
         ),
       );
@@ -237,8 +245,8 @@ class NotificacaoService {
           canalNovaId,
           canalNovaNome,
           channelDescription: 'Avisos de novas solicitações na fila',
-          importance: Importance.high,
-          priority: Priority.high,
+          importance: Importance.max,
+          priority: Priority.max,
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('notif_solicitacao'),
           category: AndroidNotificationCategory.message,

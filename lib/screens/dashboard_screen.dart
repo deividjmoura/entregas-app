@@ -107,24 +107,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _kpi(String title, String value, Color color, IconData icon) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border(
+            left: BorderSide(color: color, width: 3.5),
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 4),
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
               Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontSize: 11),
-                    overflow: TextOverflow.ellipsis),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ]),
-            const SizedBox(height: 4),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: color,
+                height: 1.0,
+                letterSpacing: -0.5,
+              ),
+            ),
           ],
         ),
       ),
@@ -153,17 +174,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               : Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
                       child: TextField(
                         controller: _buscaCtrl,
                         decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search, size: 20),
+                          prefixIcon: const Icon(Icons.search, size: 22),
                           hintText:
                               'Buscar histórico (item, local, solicitante...)',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                          isDense: false,
                           suffixIcon: _buscaCtrl.text.isEmpty
                               ? null
                               : IconButton(
@@ -260,29 +278,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     const Divider(height: 1),
                                 itemBuilder: (_, i) {
                                   final s = lista[i];
+                                  final cor = AppConstantes.corStatus(s.status);
                                   return ListTile(
-                                    dense: true,
-                                    title: Text(s.descricaoItem,
-                                        style: const TextStyle(fontSize: 14)),
-                                    subtitle: Text(
-                                      '${s.localDestino}'
-                                      '${s.rackOuSlide != null ? ' · ${s.rackOuSlide}' : ''}'
-                                      ' · ${s.solicitanteNome}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    trailing: Chip(
-                                      label: Text(
-                                        AppConstantes.formatarStatus(s.status),
-                                        style: const TextStyle(fontSize: 10),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 6),
+                                    title: Text(
+                                      s.descricaoItem,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      visualDensity: VisualDensity.compact,
-                                      padding: EdgeInsets.zero,
-                                      labelPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 6),
-                                      backgroundColor:
-                                          AppConstantes.corStatus(s.status)
-                                              .withOpacity(0.15),
+                                    ),
+                                    subtitle: Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '${s.localDestino}'
+                                        '${s.rackOuSlide != null ? ' · ${s.rackOuSlide}' : ''}'
+                                        ' · ${s.solicitanteNome}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                    trailing: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: cor.withOpacity(0.14),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        AppConstantes.formatarStatus(s.status),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: cor,
+                                        ),
+                                      ),
                                     ),
                                   );
                                 },
