@@ -37,14 +37,6 @@ O **entregas-app** é o cliente mobile (Flutter) da **Central de Despacho**, con
 | ⚡ **Atualização automática** | Polling a cada 5s + pull-to-refresh, sem necessidade de botão manual |
 | 🖼️ **Visualização de fotos** | Acesso rápido às imagens das solicitações |
 
-### 🔮 Ainda não implementado
-
-- Chat entre solicitante e entregador (via Firebase)
-- Presença de usuários online (`sessionId`)
-- Autenticação Firebase (`signInAnonymously` + `updateProfile`)
-- Ícone e nome personalizados do app
-- Build final assinado para distribuição (`flutter build apk --release`)
-
 ## 🛠️ Stack técnica
 
 - **Framework**: Flutter
